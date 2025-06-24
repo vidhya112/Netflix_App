@@ -1,19 +1,23 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  updateProfile,
 } from "firebase/auth";
 
 import Header from "./Header";
 import { checkValidData } from "../utils/validate";
 import { auth } from "../utils/firebase";
-import { useNavigate } from "react-router-dom";
+import { addUser } from "../utils/userSlice";
 
 const Login = () => {
   const [isSignInForm, setIsSignInForm] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
 
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const email = useRef(null);
   const password = useRef(null);
@@ -42,7 +46,19 @@ const Login = () => {
         .then((userCredential) => {
           const user = userCredential.user;
           console.log(user);
-          navigate("/brows");
+          updateProfile(user, {
+            displayName: fullName.current?.value,
+          })
+            .then(() => {
+              const { uid, email, displayName } = auth.currentUser;
+              dispatch(
+                addUser({ uid: uid, email: email, displayName: displayName })
+              );
+              navigate("/brows");
+            })
+            .catch((error) => {
+              setErrorMessage(errorMessage);
+            });
         })
         .catch((error) => {
           setErrorMessage(error.message);
@@ -59,7 +75,7 @@ const Login = () => {
           navigate("/brows");
         })
         .catch((error) => {
-          setErrorMessage(error.code + "-" + error.message);
+          setErrorMessage(error.message);
         });
     }
   };
