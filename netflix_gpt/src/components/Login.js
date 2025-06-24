@@ -1,10 +1,19 @@
 import { useRef, useState } from "react";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
+
 import Header from "./Header";
 import { checkValidData } from "../utils/validate";
+import { auth } from "../utils/firebase";
+import { useNavigate } from "react-router-dom";
 
 const Login = () => {
   const [isSignInForm, setIsSignInForm] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  const navigate = useNavigate();
 
   const email = useRef(null);
   const password = useRef(null);
@@ -18,9 +27,41 @@ const Login = () => {
     const errorMessage = checkValidData(
       email.current.value,
       password.current.value,
-      fullName.current.value
+      fullName.current?.value
     );
     setErrorMessage(errorMessage);
+
+    if (errorMessage) return;
+
+    if (!isSignInForm) {
+      createUserWithEmailAndPassword(
+        auth,
+        email.current.value,
+        password.current.value
+      )
+        .then((userCredential) => {
+          const user = userCredential.user;
+          console.log(user);
+          navigate("/brows");
+        })
+        .catch((error) => {
+          setErrorMessage(error.message);
+        });
+    } else {
+      signInWithEmailAndPassword(
+        auth,
+        email.current.value,
+        password.current.value
+      )
+        .then((userCredential) => {
+          const user = userCredential.user;
+          console.log(user);
+          navigate("/brows");
+        })
+        .catch((error) => {
+          setErrorMessage(error.code + "-" + error.message);
+        });
+    }
   };
 
   return (
@@ -28,7 +69,7 @@ const Login = () => {
       <Header />
       <div className="absolute">
         <img
-        className="w-full h-full brightness-50"
+          className="w-full h-full brightness-50"
           src="https://assets.nflxext.com/ffe/siteui/vlv3/8200f588-2e93-4c95-8eab-ebba17821657/web/IN-en-20250616-TRIFECTA-perspective_9cbc87b2-d9bb-4fa8-9f8f-a4fe8fc72545_large.jpg"
           alt="background-img"
         />
@@ -69,7 +110,7 @@ const Login = () => {
         </button>
         <p className="py-5 text-gray-400 ">
           {isSignInForm ? "New to Netflix?" : "Already registered?"}
-          <span className="font-bold" onClick={toggleSignInForm}>
+          <span className="text-white font-bold" onClick={toggleSignInForm}>
             &nbsp;{isSignInForm ? "Sign up now." : "Sign in now."}
           </span>
         </p>
