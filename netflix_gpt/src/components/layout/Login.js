@@ -7,10 +7,10 @@ import {
 } from "firebase/auth";
 
 import Header from "./Header";
-import { checkValidData } from "../utils/validate";
-import { auth } from "../utils/firebase";
-import { addUser } from "../utils/userSlice";
-import { BACKGROUND_IMAGE } from "../utils/constant";
+import { checkValidData } from "../../utils/validate";
+import { auth } from "../../utils/firebase";
+import { addUser } from "../../features/userSlice";
+import { BACKGROUND_IMAGE } from "../../utils/constant";
 
 const Login = () => {
   const [isSignInForm, setIsSignInForm] = useState(true);

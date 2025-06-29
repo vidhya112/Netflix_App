@@ -13,8 +13,7 @@ export const GET_OPTIONS = {
   method: "GET",
   headers: {
     accept: "application/json",
-    Authorization:
-      "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiNGJiYjVkYmExNzEyODkzYTU4MmRmMjYzMWIxZWMxMSIsIm5iZiI6MTc1MDg1NDc5My42MTYsInN1YiI6IjY4NWJlYzg5ZDk1OTU0MDZlY2FmYTVlYSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.a3o5t-gNY7WqpvUPf66GRoPZkxGcN0d6sJCgtbB5u88",
+    Authorization: "Bearer " + process.env.REACT_APP_TMDB_KEY,
   },
 };
 
@@ -28,12 +27,22 @@ export const SUPPORTED_LANGUAGE = [
     identifier: "en",
     name: "English",
   },
-    {
+  {
     identifier: "hindi",
     name: "Hindi",
   },
-    {
+  {
     identifier: "spanish",
     name: "Spanish",
   },
+];
+
+export const OPENAI_API_KEY = process.env.REACT_APP_OPENAI_API_KEY;
+
+export const getMovieList = [
+  "Golmaal",
+  "Hera pheri",
+  "Kesari",
+  "Barfi",
+  "3-Idiots",
 ];

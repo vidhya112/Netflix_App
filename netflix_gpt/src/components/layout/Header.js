@@ -3,16 +3,16 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 
-import { auth } from "../utils/firebase";
-import { addUser, removeUser } from "../utils/userSlice";
+import { auth } from "../../utils/firebase";
+import { addUser, removeUser } from "../../features/userSlice";
 import {
   ROUTE,
   LOGO,
   USER_AVATAR,
   SUPPORTED_LANGUAGE,
-} from "../utils/constant";
-import { toggleGptSearchView } from "../utils/gptSlice";
-import { changeLanguage } from "../utils/configSlice";
+} from "../../utils/constant";
+import { toggleGptSearchView } from "../../features/gptSlice";
+import { changeLanguage } from "../../features/configSlice";
 
 const Header = () => {
   const navigate = useNavigate();

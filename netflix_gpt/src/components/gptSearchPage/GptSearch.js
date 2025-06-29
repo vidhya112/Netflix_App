@@ -1,11 +1,12 @@
 import React from "react";
 import GptSearchBar from "./GptSearchBar";
-import { BACKGROUND_IMAGE } from "../utils/constant";
+import { BACKGROUND_IMAGE } from "../../utils/constant";
+import GptMovieSuggestion from "./GptMovieSuggestion";
 
 const GptSearch = () => {
   return (
     <div>
-      <div className="absolute w-screen h-screen overflow-hidden -z-10">
+      <div className="fixed w-screen h-screen overflow-hidden -z-10">
         <img
           className="w-full h-full brightness-50"
           src={BACKGROUND_IMAGE}
@@ -13,6 +14,7 @@ const GptSearch = () => {
         />
       </div>
       <GptSearchBar />
+      <GptMovieSuggestion />
     </div>
   );
 };
