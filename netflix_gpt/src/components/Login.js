@@ -10,6 +10,7 @@ import Header from "./Header";
 import { checkValidData } from "../utils/validate";
 import { auth } from "../utils/firebase";
 import { addUser } from "../utils/userSlice";
+import { BACKGROUND_IMAGE } from "../utils/constant";
 
 const Login = () => {
   const [isSignInForm, setIsSignInForm] = useState(true);
@@ -81,7 +82,7 @@ const Login = () => {
       <div className="absolute w-screen h-screen overflow-hidden">
         <img
           className="w-full h-full brightness-50"
-          src="https://assets.nflxext.com/ffe/siteui/vlv3/8200f588-2e93-4c95-8eab-ebba17821657/web/IN-en-20250616-TRIFECTA-perspective_9cbc87b2-d9bb-4fa8-9f8f-a4fe8fc72545_large.jpg"
+          src={BACKGROUND_IMAGE}
           alt="background-img"
         />
       </div>

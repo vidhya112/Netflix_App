@@ -18,4 +18,22 @@ export const GET_OPTIONS = {
   },
 };
 
-export const IMG_CDN_URL = "https://image.tmdb.org/t/p/w500"
+export const IMG_CDN_URL = "https://image.tmdb.org/t/p/w500";
+
+export const BACKGROUND_IMAGE =
+  "https://assets.nflxext.com/ffe/siteui/vlv3/8200f588-2e93-4c95-8eab-ebba17821657/web/IN-en-20250616-TRIFECTA-perspective_9cbc87b2-d9bb-4fa8-9f8f-a4fe8fc72545_large.jpg";
+
+export const SUPPORTED_LANGUAGE = [
+  {
+    identifier: "en",
+    name: "English",
+  },
+    {
+    identifier: "hindi",
+    name: "Hindi",
+  },
+    {
+    identifier: "spanish",
+    name: "Spanish",
+  },
+];
