@@ -34,6 +34,6 @@ vite.config.js
 
 # Firebase
 .firebase
-.firebaserc
 firebase-debug.log
 firefoo.log
+
