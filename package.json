@@ -12,7 +12,8 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "lint:watch": "eslint src --watch",
-    "deploy:firebase": "npm run build && npx firebase-tools deploy --only hosting"
+    "deploy:firebase": "npm run build && npx firebase-tools deploy --only hosting --project netflixgpt-7d954"
+
 
   },
   "dependencies": {
