@@ -41,6 +41,10 @@ export interface OMDBSearchResponse {
 // Track if OMDb key is valid to avoid redundant network 401s
 let isOmdbAvailable = true;
 
+const getOMDBApiKey = (): string => {
+    return import.meta.env.VITE_OMDB_API_KEY || "a8cb809d";
+};
+
 /**
  * Fetch movie details by Title (e.g. ?t=Oppenheimer&apikey=...&plot=full)
  */
@@ -48,7 +52,7 @@ export const fetchOMDBMovie = async (title: string, plot: 'short' | 'full' = 'fu
     const trimmed = title.trim();
     if (!trimmed || !isOmdbAvailable) return null;
 
-    const apiKey = import.meta.env.VITE_OMDB_API_KEY;
+    const apiKey = getOMDBApiKey();
     if (!apiKey) return null;
 
     try {
@@ -56,7 +60,7 @@ export const fetchOMDBMovie = async (title: string, plot: 'short' | 'full' = 'fu
         const res = await fetch(url);
 
         if (res.status === 401) {
-            console.info(`[OMDb API] ℹ️ OMDb key returned 401 (needs activation email confirmation or invalid). Using TVMaze + Gemini engine.`);
+            console.info(`[OMDb API] ℹ️ OMDb key returned 401. Using TVMaze + Gemini engine.`);
             isOmdbAvailable = false;
             return null;
         }
@@ -82,7 +86,7 @@ export const fetchOMDBMovieById = async (imdbId: string, plot: 'short' | 'full' 
     const trimmed = imdbId.trim();
     if (!trimmed || !isOmdbAvailable) return null;
 
-    const apiKey = import.meta.env.VITE_OMDB_API_KEY;
+    const apiKey = getOMDBApiKey();
     if (!apiKey) return null;
 
     try {
@@ -112,8 +116,9 @@ export const searchOMDB = async (query: string): Promise<Movie[]> => {
     const trimmed = query.trim();
     if (!trimmed || !isOmdbAvailable) return [];
 
-    const apiKey = import.meta.env.VITE_OMDB_API_KEY;
+    const apiKey = getOMDBApiKey();
     if (!apiKey) return [];
+
 
     try {
         const url = `https://www.omdbapi.com/?apikey=${apiKey}&s=${encodeURIComponent(trimmed)}`;
