@@ -1,11 +1,11 @@
 import React, { useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
+    auth,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     updateProfile,
-} from "firebase/auth";
-import { auth } from "../../utils/firebase";
+} from "../../utils/firebase";
 import { setUser } from "../../features/userSlice";
 import { showToast } from "../../features/configSlice";
 import { Header } from "./Header";
@@ -237,7 +237,7 @@ export const Login: React.FC = () => {
             </div>
 
             <div className="relative z-10 text-center text-xs text-gray-500 pb-6">
-        Protected by Google reCAPTCHA & Firebase Security.
+                Protected by Google reCAPTCHA & Secure Encryption.
             </div>
         </div>
     );

@@ -4,8 +4,7 @@ import { RootState } from "../../store/appStore";
 import { toggleGptSearchView, setGptSearchView } from "../../features/gptSlice";
 import { changeLanguage, setActiveNavTab } from "../../features/configSlice";
 import { removeUser, setActiveProfile } from "../../features/userSlice";
-import { auth } from "../../utils/firebase";
-import { signOut } from "firebase/auth";
+import { auth, signOut } from "../../utils/firebase";
 import { LOGO, USER_AVATARS, SUPPORTED_LANGUAGES } from "../../utils/constant";
 import { language } from "../../utils/languageConstant";
 import {

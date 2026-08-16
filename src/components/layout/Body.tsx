@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../../utils/firebase";
+import { auth, onAuthStateChanged } from "../../utils/firebase";
 import { setUser } from "../../features/userSlice";
 import { RootState } from "../../store/appStore";
 import { Browse } from "./Browse";

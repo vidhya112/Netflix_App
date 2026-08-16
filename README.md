@@ -1,7 +1,6 @@
 # 🍿 Netflix GPT — AI-Powered Next-Gen Streaming Experience
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-GitHub_Pages-E50914?style=for-the-badge&logo=netflix&logoColor=white)](https://vidhya112.github.io/Netflix_App/)
-[![Firebase Hosting](https://img.shields.io/badge/Live_App-Firebase_Hosting-FFA611?style=for-the-badge&logo=firebase&logoColor=black)](https://netflixgpt-7d954.web.app)
 [![React 19](https://img.shields.io/badge/React_19-TypeScript-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![Gemini AI](https://img.shields.io/badge/Google_Gemini-2.5_Flash-8E75FF?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 
@@ -9,10 +8,9 @@ A state-of-the-art, full-stack **Netflix Clone** integrated with **Google Gemini
 
 ---
 
-## 🌐 Live Deployments
+## 🌐 Live Deployment
 
 - 🚀 **GitHub Pages**: [https://vidhya112.github.io/Netflix_App/](https://vidhya112.github.io/Netflix_App/)
-- 🔥 **Firebase Hosting**: [https://netflixgpt-7d954.web.app](https://netflixgpt-7d954.web.app)
 
 ---
 
@@ -25,7 +23,7 @@ A state-of-the-art, full-stack **Netflix Clone** integrated with **Google Gemini
 - 👤 **Multi-Profile Avatars**: Interactive Netflix profile avatar switcher with instant Redux state persistence and automatic image sanitization.
 - 🌐 **Multi-Language Support**: Complete internationalization across 6 languages (English, Hindi, Spanish, French, German, Japanese).
 - 📌 **Watchlist & Personalization**: Real-time Add/Remove to "My List" with Redux Toolkit and interactive toast feedback.
-- 🔐 **Firebase Authentication**: Secure user registration, sign-in, session management, and profile synchronization.
+- 🔐 **Client Session Authentication**: Fast and resilient user registration, sign-in, session management, and profile synchronization.
 - 💎 **Ultra-Modern Aesthetics**: Custom glassmorphism, glowing ambient backdrops, shimmering skeleton loaders, and responsive layouts for mobile, tablet, and desktop.
 
 ---
@@ -39,8 +37,7 @@ A state-of-the-art, full-stack **Netflix Clone** integrated with **Google Gemini
 | **State Management** | Redux Toolkit (`@reduxjs/toolkit`), React-Redux |
 | **AI Intelligence** | Google Gemini API (`@google/genai` / `gemini-flash-latest`) |
 | **Movie Metadata** | OMDb API (`plot=full`), TVMaze API |
-| **Auth & Backend** | Firebase Authentication |
-| **CI/CD & Hosting** | GitHub Actions (`deploy.yml`), GitHub Pages, Firebase Hosting |
+| **CI/CD & Hosting** | GitHub Actions (`deploy.yml`), GitHub Pages |
 
 ---
 
@@ -65,15 +62,6 @@ VITE_GEMINI_API_KEY=your_gemini_api_key_here
 
 # OMDb API Key
 VITE_OMDB_API_KEY=your_omdb_api_key_here
-
-# Firebase Configuration
-VITE_FIREBASE_API_KEY=your_firebase_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
 
 ### 4. Run Development Server

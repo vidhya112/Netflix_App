@@ -11,10 +11,7 @@
     "type-check:watch": "tsc --noEmit --watch",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "lint:watch": "eslint src --watch",
-    "deploy:firebase": "npm run build && npx firebase-tools deploy --only hosting --project netflixgpt-7d954"
-
-
+    "lint:watch": "eslint src --watch"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",
