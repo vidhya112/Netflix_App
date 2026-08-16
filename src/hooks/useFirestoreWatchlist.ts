@@ -11,26 +11,23 @@ import { Movie } from "../types/movie.types";
 export const useFirestoreWatchlist = () => {
     const dispatch = useDispatch();
     const user = useSelector((state: RootState) => state.user.user);
+    const uid = user?.uid;
 
     useEffect(() => {
-        if (!user || !user.uid) {
-            // When not logged in or logged out, immediately clear watchlist from Redux
+        if (!uid) {
             dispatch(clearWatchlist());
             return;
         }
 
         // Subscribe to current user's isolated Firestore watchlist collection
-        const unsubscribe = subscribeToWatchlist(user.uid, (firestoreItems) => {
+        const unsubscribe = subscribeToWatchlist(uid, (firestoreItems) => {
             if (Array.isArray(firestoreItems)) {
                 dispatch(setWatchlistItems(firestoreItems as unknown as Movie[]));
-            } else {
-                dispatch(clearWatchlist());
             }
         });
 
         return () => {
             unsubscribe();
-            dispatch(clearWatchlist());
         };
-    }, [user?.uid, dispatch]);
+    }, [uid, dispatch]);
 };

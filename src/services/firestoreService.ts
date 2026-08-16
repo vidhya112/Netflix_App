@@ -20,6 +20,19 @@ const canUseFirestore = (uid?: string): boolean => {
 };
 
 /**
+ * Clean and sanitize data to remove undefined values before passing to Firestore
+ */
+const cleanFirestoreData = (data: Record<string, any>): Record<string, any> => {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+        if (value !== undefined) {
+            cleaned[key] = value;
+        }
+    }
+    return cleaned;
+};
+
+/**
  * Detect client browser, OS, and device information
  */
 export const getClientDeviceInfo = (): {
@@ -60,7 +73,7 @@ export const getClientDeviceInfo = (): {
 };
 
 /**
- * Sync user profile to Firestore (Scoped to users/{uid})
+ * Sync user profile to Firestore (users/{uid})
  */
 export const syncUserProfileToFirestore = async (
     uid: string,
@@ -75,21 +88,22 @@ export const syncUserProfileToFirestore = async (
 
     try {
         const userRef = doc(db, "users", uid);
-        await setDoc(
-            userRef,
-            {
-                ...profileData,
-                updatedAt: serverTimestamp(),
-            },
-            { merge: true }
-        );
+        const payload = cleanFirestoreData({
+            email: profileData.email || null,
+            displayName: profileData.displayName || null,
+            photoURL: profileData.photoURL || null,
+            lang: profileData.lang || "en",
+            updatedAt: serverTimestamp(),
+        });
+        await setDoc(userRef, payload, { merge: true });
+        console.log(`[Firestore] Successfully synced profile for ${uid}`);
     } catch (err) {
-        console.warn("Firestore syncUserProfile error:", err);
+        console.error("Firestore syncUserProfile error:", err);
     }
 };
 
 /**
- * Register a login session in Firestore (Scoped to users/{uid}/sessions/{sessionId})
+ * Register a login session in Firestore (users/{uid}/sessions/{sessionId})
  */
 export const registerUserSession = async (uid: string): Promise<UserSession> => {
     const { deviceId, deviceName, browser, os } = getClientDeviceInfo();
@@ -98,10 +112,10 @@ export const registerUserSession = async (uid: string): Promise<UserSession> => 
 
     const session: UserSession = {
         id: sessionId,
-        deviceId,
-        deviceName,
-        browser,
-        os,
+        deviceId: deviceId || "unknown_device",
+        deviceName: deviceName || "Web Device",
+        browser: browser || "Web Browser",
+        os: os || "Unknown OS",
         ip: "Local / HTTPS Edge",
         createdAt: now,
         lastActive: now,
@@ -112,17 +126,15 @@ export const registerUserSession = async (uid: string): Promise<UserSession> => 
     if (canUseFirestore(uid) && db) {
         try {
             const sessionRef = doc(db, "users", uid, "sessions", sessionId);
-            await setDoc(
-                sessionRef,
-                {
-                    ...session,
-                    updatedAt: serverTimestamp(),
-                },
-                { merge: true }
-            );
+            const payload = cleanFirestoreData({
+                ...session,
+                updatedAt: serverTimestamp(),
+            });
+            await setDoc(sessionRef, payload, { merge: true });
+            console.log(`[Firestore] Successfully registered session for ${uid}`);
             return session;
         } catch (err) {
-            console.warn("Firestore session registration error:", err);
+            console.error("Firestore session registration error:", err);
         }
     }
 
@@ -130,7 +142,7 @@ export const registerUserSession = async (uid: string): Promise<UserSession> => 
 };
 
 /**
- * Fetch all active sessions for a user (Scoped to users/{uid}/sessions)
+ * Fetch all active sessions for a user (users/{uid}/sessions)
  */
 export const fetchUserSessions = async (uid: string): Promise<UserSession[]> => {
     if (!uid) return [];
@@ -152,7 +164,7 @@ export const fetchUserSessions = async (uid: string): Promise<UserSession[]> => 
             });
             if (list.length > 0) return list;
         } catch (err) {
-            console.warn("Firestore fetchUserSessions error:", err);
+            console.error("Firestore fetchUserSessions error:", err);
         }
     }
 
@@ -173,7 +185,7 @@ export const revokeUserSession = async (uid: string, sessionId: string): Promise
             revokedAt: serverTimestamp(),
         });
     } catch (err) {
-        console.warn("Firestore revoke session error:", err);
+        console.error("Firestore revoke session error:", err);
     }
 };
 
@@ -197,12 +209,12 @@ export const revokeAllOtherSessions = async (uid: string): Promise<void> => {
             }
         }
     } catch (err) {
-        console.warn("Firestore revoke all other sessions error:", err);
+        console.error("Firestore revoke all other sessions error:", err);
     }
 };
 
 /**
- * Real-time Watchlist Subscription (Scoped to users/{uid}/watchlist)
+ * Real-time Watchlist Subscription (users/{uid}/watchlist)
  */
 export const subscribeToWatchlist = (
     uid: string,
@@ -222,17 +234,16 @@ export const subscribeToWatchlist = (
                 snapshot.forEach((d) => {
                     items.push(d.data() as WatchlistItem);
                 });
+                console.log(`[Firestore] Watchlist snapshot loaded: ${items.length} items for ${uid}`);
                 onUpdate(items);
             },
             (err) => {
-                console.warn("Watchlist onSnapshot error:", err);
-                onUpdate([]);
+                console.error("Watchlist onSnapshot error:", err);
             }
         );
         return unsubscribe;
     } catch (e) {
-        console.warn("Firestore subscribeToWatchlist failed:", e);
-        onUpdate([]);
+        console.error("Firestore subscribeToWatchlist failed:", e);
         return () => {};
     }
 };
@@ -248,12 +259,23 @@ export const addMovieToFirestoreWatchlist = async (
 
     try {
         const movieRef = doc(db, "users", uid, "watchlist", String(movie.id));
-        await setDoc(movieRef, {
-            ...movie,
+        const payload = cleanFirestoreData({
+            id: movie.id,
+            title: movie.title || movie.name || "Untitled",
+            name: movie.name || movie.title || "Untitled",
+            overview: movie.overview || "",
+            poster_path: movie.poster_path || null,
+            backdrop_path: movie.backdrop_path || null,
+            release_date: movie.release_date || movie.first_air_date || null,
+            vote_average: typeof movie.vote_average === "number" ? movie.vote_average : 7.5,
+            vote_count: typeof movie.vote_count === "number" ? movie.vote_count : 100,
             addedAt: movie.addedAt || new Date().toISOString(),
         });
+
+        await setDoc(movieRef, payload, { merge: true });
+        console.log(`[Firestore] Successfully saved movie ${movie.id} to watchlist for user ${uid}`);
     } catch (err) {
-        console.warn("Firestore addMovieToWatchlist error:", err);
+        console.error("Firestore addMovieToWatchlist error:", err);
     }
 };
 
@@ -269,8 +291,9 @@ export const removeMovieFromFirestoreWatchlist = async (
     try {
         const movieRef = doc(db, "users", uid, "watchlist", String(movieId));
         await deleteDoc(movieRef);
+        console.log(`[Firestore] Successfully removed movie ${movieId} from watchlist for user ${uid}`);
     } catch (err) {
-        console.warn("Firestore removeMovieFromWatchlist error:", err);
+        console.error("Firestore removeMovieFromWatchlist error:", err);
     }
 };
 
@@ -287,12 +310,13 @@ export const saveGptSearchToFirestore = async (
 
     try {
         const searchRef = doc(db, "users", uid, "gptHistory", historyId);
-        await setDoc(searchRef, {
+        const payload = cleanFirestoreData({
             query: searchQuery,
             results: movieNames,
             timestamp: serverTimestamp(),
         });
+        await setDoc(searchRef, payload);
     } catch (err) {
-        console.warn("Firestore saveGptSearch error:", err);
+        console.error("Firestore saveGptSearch error:", err);
     }
 };
