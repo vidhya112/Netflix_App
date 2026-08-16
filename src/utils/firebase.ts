@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
 
 const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDin2thUMEYLCEcT5QUQUrWDTHa1Jti5Bk",
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "netflixgpt-7d954.firebaseapp.com",
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "netflixgpt-7d954",
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "netflixgpt-7d954.firebasestorage.app",
