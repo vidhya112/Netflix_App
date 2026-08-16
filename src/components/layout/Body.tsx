@@ -9,6 +9,10 @@ import { Login } from "./Login";
 import { ResetPasswordModal } from "../modal/ResetPasswordModal";
 import { useFirestoreWatchlist } from "../../hooks/useFirestoreWatchlist";
 import { USER_AVATARS } from "../../utils/constant";
+import {
+    syncUserProfileToFirestore,
+    registerUserSession,
+} from "../../services/firestoreService";
 
 export const Body: React.FC = () => {
     const dispatch = useDispatch();
@@ -24,7 +28,8 @@ export const Body: React.FC = () => {
             const params = new URLSearchParams(window.location.search);
             const mode = params.get("mode");
             const oobCode = params.get("oobCode");
-            if ((mode === "resetPassword" || mode === "action") && oobCode) {
+
+            if (mode === "resetPassword" && oobCode) {
                 setUrlResetCode(oobCode);
             }
         } catch {
@@ -45,15 +50,29 @@ export const Body: React.FC = () => {
                         }
                     }
 
+                    const photoURL =
+                        firebaseUser.photoURL && !firebaseUser.photoURL.includes("nflxso.net")
+                            ? firebaseUser.photoURL
+                            : USER_AVATARS[0].url;
+
+                    const displayName =
+                        firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split("@")[0] : "User");
+
+                    // Ensure user document and session are recorded in Firestore
+                    syncUserProfileToFirestore(firebaseUser.uid, {
+                        email: firebaseUser.email,
+                        displayName,
+                        photoURL,
+                    }).catch(() => {});
+
+                    registerUserSession(firebaseUser.uid).catch(() => {});
+
                     dispatch(
                         setUser({
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
-                            displayName: firebaseUser.displayName,
-                            photoURL:
-                                firebaseUser.photoURL && !firebaseUser.photoURL.includes("nflxso.net")
-                                    ? firebaseUser.photoURL
-                                    : USER_AVATARS[0].url,
+                            displayName,
+                            photoURL,
                             jwtToken: token,
                         })
                     );

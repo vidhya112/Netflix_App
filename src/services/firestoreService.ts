@@ -8,15 +8,15 @@ import {
     updateDoc,
     serverTimestamp,
 } from "firebase/firestore";
-import { auth, db } from "../utils/firebase";
+import { db } from "../utils/firebase";
 import { UserSession } from "../types/user.types";
 import { WatchlistItem } from "../types/movie.types";
 
 /**
- * Check if the user is authenticated through real Firebase Auth
+ * Check if Firestore is available and user is a real registered account
  */
-const isRealAuthUser = (uid: string): boolean => {
-    return Boolean(auth?.currentUser && auth.currentUser.uid === uid && !uid.startsWith("guest_"));
+const canUseFirestore = (uid?: string): boolean => {
+    return Boolean(db && uid && !uid.startsWith("guest_"));
 };
 
 /**
@@ -28,7 +28,6 @@ export const getClientDeviceInfo = (): {
     browser: string;
     os: string;
 } => {
-    // Generate or fetch device identifier
     let deviceId = localStorage.getItem("netflix_gpt_device_id");
     if (!deviceId) {
         deviceId = `dev_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
@@ -61,7 +60,7 @@ export const getClientDeviceInfo = (): {
 };
 
 /**
- * Sync user profile to Firestore (Strictly scoped to users/{uid})
+ * Sync user profile to Firestore (Scoped to users/{uid})
  */
 export const syncUserProfileToFirestore = async (
     uid: string,
@@ -72,27 +71,25 @@ export const syncUserProfileToFirestore = async (
         lang?: string;
     }
 ): Promise<void> => {
-    if (!uid) return;
+    if (!canUseFirestore(uid) || !db) return;
 
-    if (db && isRealAuthUser(uid)) {
-        try {
-            const userRef = doc(db, "users", uid);
-            await setDoc(
-                userRef,
-                {
-                    ...profileData,
-                    updatedAt: serverTimestamp(),
-                },
-                { merge: true }
-            );
-        } catch (err) {
-            console.warn("Firestore syncUserProfile error:", err);
-        }
+    try {
+        const userRef = doc(db, "users", uid);
+        await setDoc(
+            userRef,
+            {
+                ...profileData,
+                updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+        );
+    } catch (err) {
+        console.warn("Firestore syncUserProfile error:", err);
     }
 };
 
 /**
- * Register a login session in Firestore (Strictly scoped to users/{uid}/sessions/{sessionId})
+ * Register a login session in Firestore (Scoped to users/{uid}/sessions/{sessionId})
  */
 export const registerUserSession = async (uid: string): Promise<UserSession> => {
     const { deviceId, deviceName, browser, os } = getClientDeviceInfo();
@@ -112,7 +109,7 @@ export const registerUserSession = async (uid: string): Promise<UserSession> => 
         status: "active",
     };
 
-    if (db && isRealAuthUser(uid)) {
+    if (canUseFirestore(uid) && db) {
         try {
             const sessionRef = doc(db, "users", uid, "sessions", sessionId);
             await setDoc(
@@ -125,7 +122,7 @@ export const registerUserSession = async (uid: string): Promise<UserSession> => 
             );
             return session;
         } catch (err) {
-            console.warn("Firestore session registration fallback:", err);
+            console.warn("Firestore session registration error:", err);
         }
     }
 
@@ -133,14 +130,14 @@ export const registerUserSession = async (uid: string): Promise<UserSession> => 
 };
 
 /**
- * Fetch all active sessions for a user (Strictly scoped to users/{uid}/sessions)
+ * Fetch all active sessions for a user (Scoped to users/{uid}/sessions)
  */
 export const fetchUserSessions = async (uid: string): Promise<UserSession[]> => {
     if (!uid) return [];
     const { deviceId } = getClientDeviceInfo();
     const currentSessionId = `session_${deviceId}`;
 
-    if (db && isRealAuthUser(uid)) {
+    if (canUseFirestore(uid) && db) {
         try {
             const sessionsCol = collection(db, "users", uid, "sessions");
             const snapshot = await getDocs(sessionsCol);
@@ -155,11 +152,10 @@ export const fetchUserSessions = async (uid: string): Promise<UserSession[]> => 
             });
             if (list.length > 0) return list;
         } catch (err) {
-            console.warn("Firestore fetchUserSessions fallback:", err);
+            console.warn("Firestore fetchUserSessions error:", err);
         }
     }
 
-    // Default current session for guest / fallback
     const defaultSession = await registerUserSession(uid);
     return [defaultSession];
 };
@@ -168,18 +164,16 @@ export const fetchUserSessions = async (uid: string): Promise<UserSession[]> => 
  * Revoke/Terminate a session
  */
 export const revokeUserSession = async (uid: string, sessionId: string): Promise<void> => {
-    if (!uid || !sessionId) return;
+    if (!canUseFirestore(uid) || !sessionId || !db) return;
 
-    if (db && isRealAuthUser(uid)) {
-        try {
-            const sessionRef = doc(db, "users", uid, "sessions", sessionId);
-            await updateDoc(sessionRef, {
-                status: "revoked",
-                revokedAt: serverTimestamp(),
-            });
-        } catch (err) {
-            console.warn("Firestore revoke session error:", err);
-        }
+    try {
+        const sessionRef = doc(db, "users", uid, "sessions", sessionId);
+        await updateDoc(sessionRef, {
+            status: "revoked",
+            revokedAt: serverTimestamp(),
+        });
+    } catch (err) {
+        console.warn("Firestore revoke session error:", err);
     }
 };
 
@@ -187,133 +181,118 @@ export const revokeUserSession = async (uid: string, sessionId: string): Promise
  * Revoke all other sessions
  */
 export const revokeAllOtherSessions = async (uid: string): Promise<void> => {
-    if (!uid) return;
+    if (!canUseFirestore(uid) || !db) return;
     const { deviceId } = getClientDeviceInfo();
     const currentSessionId = `session_${deviceId}`;
 
-    if (db && isRealAuthUser(uid)) {
-        try {
-            const sessionsCol = collection(db, "users", uid, "sessions");
-            const snapshot = await getDocs(sessionsCol);
-            for (const docSnap of snapshot.docs) {
-                if (docSnap.id !== currentSessionId) {
-                    await updateDoc(docSnap.ref, {
-                        status: "revoked",
-                        revokedAt: serverTimestamp(),
-                    });
-                }
+    try {
+        const sessionsCol = collection(db, "users", uid, "sessions");
+        const snapshot = await getDocs(sessionsCol);
+        for (const docSnap of snapshot.docs) {
+            if (docSnap.id !== currentSessionId) {
+                await updateDoc(docSnap.ref, {
+                    status: "revoked",
+                    revokedAt: serverTimestamp(),
+                });
             }
-        } catch (err) {
-            console.warn("Firestore revoke all other sessions error:", err);
         }
+    } catch (err) {
+        console.warn("Firestore revoke all other sessions error:", err);
     }
 };
 
 /**
- * Real-time Watchlist Subscription (Strictly scoped to users/{uid}/watchlist)
+ * Real-time Watchlist Subscription (Scoped to users/{uid}/watchlist)
  */
 export const subscribeToWatchlist = (
     uid: string,
     onUpdate: (items: WatchlistItem[]) => void
 ): (() => void) => {
-    if (!uid) {
+    if (!canUseFirestore(uid) || !db) {
         onUpdate([]);
         return () => {};
     }
 
-    // Real authenticated user ➔ Cloud Firestore is the absolute source of truth
-    if (db && isRealAuthUser(uid)) {
-        try {
-            const watchlistCol = collection(db, "users", uid, "watchlist");
-            const unsubscribe = onSnapshot(
-                watchlistCol,
-                (snapshot) => {
-                    const items: WatchlistItem[] = [];
-                    snapshot.forEach((d) => {
-                        items.push(d.data() as WatchlistItem);
-                    });
-                    onUpdate(items);
-                },
-                (err) => {
-                    console.warn("Watchlist onSnapshot error:", err);
-                    onUpdate([]);
-                }
-            );
-            return unsubscribe;
-        } catch (e) {
-            console.warn("Firestore subscribeToWatchlist failed:", e);
-            onUpdate([]);
-            return () => {};
-        }
+    try {
+        const watchlistCol = collection(db, "users", uid, "watchlist");
+        const unsubscribe = onSnapshot(
+            watchlistCol,
+            (snapshot) => {
+                const items: WatchlistItem[] = [];
+                snapshot.forEach((d) => {
+                    items.push(d.data() as WatchlistItem);
+                });
+                onUpdate(items);
+            },
+            (err) => {
+                console.warn("Watchlist onSnapshot error:", err);
+                onUpdate([]);
+            }
+        );
+        return unsubscribe;
+    } catch (e) {
+        console.warn("Firestore subscribeToWatchlist failed:", e);
+        onUpdate([]);
+        return () => {};
     }
-
-    // Guest / Offline Demo Mode ➔ Strictly isolated to that guest uid in memory
-    onUpdate([]);
-    return () => {};
 };
 
 /**
- * Add movie to Watchlist in Firestore (Strictly users/{uid}/watchlist/{movieId})
+ * Add movie to Watchlist in Firestore (users/{uid}/watchlist/{movieId})
  */
 export const addMovieToFirestoreWatchlist = async (
     uid: string,
     movie: WatchlistItem
 ): Promise<void> => {
-    if (!uid || !movie || !movie.id) return;
+    if (!canUseFirestore(uid) || !movie || !movie.id || !db) return;
 
-    if (db && isRealAuthUser(uid)) {
-        try {
-            const movieRef = doc(db, "users", uid, "watchlist", String(movie.id));
-            await setDoc(movieRef, {
-                ...movie,
-                addedAt: movie.addedAt || new Date().toISOString(),
-            });
-        } catch (err) {
-            console.warn("Firestore addMovieToWatchlist error:", err);
-        }
+    try {
+        const movieRef = doc(db, "users", uid, "watchlist", String(movie.id));
+        await setDoc(movieRef, {
+            ...movie,
+            addedAt: movie.addedAt || new Date().toISOString(),
+        });
+    } catch (err) {
+        console.warn("Firestore addMovieToWatchlist error:", err);
     }
 };
 
 /**
- * Remove movie from Watchlist in Firestore (Strictly users/{uid}/watchlist/{movieId})
+ * Remove movie from Watchlist in Firestore (users/{uid}/watchlist/{movieId})
  */
 export const removeMovieFromFirestoreWatchlist = async (
     uid: string,
     movieId: number | string
 ): Promise<void> => {
-    if (!uid || !movieId) return;
+    if (!canUseFirestore(uid) || !movieId || !db) return;
 
-    if (db && isRealAuthUser(uid)) {
-        try {
-            const movieRef = doc(db, "users", uid, "watchlist", String(movieId));
-            await deleteDoc(movieRef);
-        } catch (err) {
-            console.warn("Firestore removeMovieFromWatchlist error:", err);
-        }
+    try {
+        const movieRef = doc(db, "users", uid, "watchlist", String(movieId));
+        await deleteDoc(movieRef);
+    } catch (err) {
+        console.warn("Firestore removeMovieFromWatchlist error:", err);
     }
 };
 
 /**
- * Save GPT Recommendation Search to Firestore (Strictly users/{uid}/gptHistory/{historyId})
+ * Save GPT Recommendation Search to Firestore (users/{uid}/gptHistory/{historyId})
  */
 export const saveGptSearchToFirestore = async (
     uid: string,
     searchQuery: string,
     movieNames: string[]
 ): Promise<void> => {
-    if (!uid || !searchQuery) return;
+    if (!canUseFirestore(uid) || !searchQuery || !db) return;
     const historyId = `search_${Date.now()}`;
 
-    if (db && isRealAuthUser(uid)) {
-        try {
-            const searchRef = doc(db, "users", uid, "gptHistory", historyId);
-            await setDoc(searchRef, {
-                query: searchQuery,
-                results: movieNames,
-                timestamp: serverTimestamp(),
-            });
-        } catch (err) {
-            console.warn("Firestore saveGptSearch error:", err);
-        }
+    try {
+        const searchRef = doc(db, "users", uid, "gptHistory", historyId);
+        await setDoc(searchRef, {
+            query: searchQuery,
+            results: movieNames,
+            timestamp: serverTimestamp(),
+        });
+    } catch (err) {
+        console.warn("Firestore saveGptSearch error:", err);
     }
 };
