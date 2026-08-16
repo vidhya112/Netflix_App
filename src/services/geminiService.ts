@@ -54,6 +54,14 @@ const cleanJsonString = (raw: string): string => {
         .trim();
 };
 
+export const getGeminiApiKey = (): string => {
+    const key = import.meta.env.VITE_GEMINI_API_KEY;
+    if (key && key.trim().length > 5) {
+        return key.trim();
+    }
+    return "";
+};
+
 /**
  * Executes a prompt across a cascade of Gemini models, automatically falling back
  * if a model encounters 503 high demand, 429 rate limits, or transient errors.
@@ -63,7 +71,7 @@ const callGeminiWithFallback = async (
     temperature = 0.7,
     maxOutputTokens = 2048
 ): Promise<string | null> => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = getGeminiApiKey();
     if (!apiKey || apiKey.trim().length <= 5) return null;
 
     for (let i = 0; i < GEMINI_MODELS.length; i++) {
@@ -113,7 +121,7 @@ const callGeminiWithFallback = async (
 export const getGeminiMovieRecommendations = async (
     query: string
 ): Promise<{ recommendations: GeminiMovieRecommendation[]; titles: string[] }> => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = getGeminiApiKey();
 
     if (apiKey && apiKey.trim().length > 5) {
         try {
@@ -146,7 +154,7 @@ Each object must have these exact keys:
             console.warn("[Gemini AI API] ⚠️ Failed to parse AI recommendations, falling back to curated list:", err);
         }
     } else {
-        console.info(`[Gemini AI Service] ℹ️ VITE_GEMINI_API_KEY not provided, using curated AI engine fallback for query: "${query}"`);
+        console.info(`[Gemini AI Service] ℹ️ Gemini API key not provided, using curated AI engine fallback for query: "${query}"`);
     }
 
     // Smart fallback based on query text
@@ -185,7 +193,7 @@ export const getGeminiMovieDetails = async (
     providers: string[];
     trailerQuery: string;
 } | null> => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = getGeminiApiKey();
     if (!apiKey || apiKey.trim().length <= 5) return null;
 
     try {
