@@ -13,23 +13,28 @@ export const Body: React.FC = () => {
     const user = useSelector((state: RootState) => state.user.user);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-            if (firebaseUser) {
-                dispatch(
-                    setUser({
-                        uid: firebaseUser.uid,
-                        email: firebaseUser.email,
-                        displayName: firebaseUser.displayName,
-                        photoURL:
-                            firebaseUser.photoURL && !firebaseUser.photoURL.includes("nflxso.net")
-                                ? firebaseUser.photoURL
-                                : USER_AVATARS[0].url,
-                    })
-                );
-            }
-        });
+        if (!auth) return;
+        try {
+            const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+                if (firebaseUser) {
+                    dispatch(
+                        setUser({
+                            uid: firebaseUser.uid,
+                            email: firebaseUser.email,
+                            displayName: firebaseUser.displayName,
+                            photoURL:
+                                firebaseUser.photoURL && !firebaseUser.photoURL.includes("nflxso.net")
+                                    ? firebaseUser.photoURL
+                                    : USER_AVATARS[0].url,
+                        })
+                    );
+                }
+            });
 
-        return () => unsubscribe();
+            return () => unsubscribe();
+        } catch (err) {
+            console.warn("Auth listener error:", err);
+        }
     }, [dispatch]);
 
     return (

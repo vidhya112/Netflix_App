@@ -62,13 +62,17 @@ export const Header: React.FC<HeaderProps> = ({ showNavigation = true }) => {
     }, []);
 
     const handleSignOut = () => {
-        signOut(auth)
-            .then(() => {
-                dispatch(removeUser());
-            })
-            .catch(() => {
-                dispatch(removeUser());
-            });
+        if (auth) {
+            signOut(auth)
+                .then(() => {
+                    dispatch(removeUser());
+                })
+                .catch(() => {
+                    dispatch(removeUser());
+                });
+        } else {
+            dispatch(removeUser());
+        }
     };
 
     const handleNavClick = (tab: string) => {

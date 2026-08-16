@@ -64,6 +64,12 @@ export const Login: React.FC = () => {
         setIsSubmitting(true);
         setErrorMessage(null);
 
+        if (!auth) {
+            setErrorMessage("Authentication service is currently unavailable. Please check your Firebase configuration.");
+            setIsSubmitting(false);
+            return;
+        }
+
         try {
             if (!isSignInForm) {
                 // Sign Up Flow
@@ -106,6 +112,8 @@ export const Login: React.FC = () => {
                 msg = "Invalid email or password credentials.";
             } else if (error.code === "auth/email-already-in-use") {
                 msg = "This email is already registered. Please sign in instead.";
+            } else if (error.code === "auth/invalid-api-key") {
+                msg = "Invalid Firebase API key. Please check your configuration.";
             }
             setErrorMessage(msg);
         } finally {
