@@ -38,7 +38,7 @@ const FALLBACK_RECOMMENDATIONS: Record<string, GeminiMovieRecommendation[]> = {
     ],
 };
 
-const GEMINI_MODEL = "gemini-flash-latest";
+const GEMINI_MODEL = "gemini-flash-lite-latest";
 
 const cleanJsonString = (raw: string): string => {
     return raw
