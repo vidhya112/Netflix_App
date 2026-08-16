@@ -38,7 +38,14 @@ const FALLBACK_RECOMMENDATIONS: Record<string, GeminiMovieRecommendation[]> = {
     ],
 };
 
-const GEMINI_MODEL = "gemini-flash-lite-latest";
+// Free tier Gemini models in order of priority & responsiveness
+const GEMINI_MODELS = [
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.7-flash",
+    "gemini-flash-latest",
+];
 
 const cleanJsonString = (raw: string): string => {
     return raw
@@ -47,39 +54,38 @@ const cleanJsonString = (raw: string): string => {
         .trim();
 };
 
-export const getGeminiMovieRecommendations = async (
-    query: string
-): Promise<{ recommendations: GeminiMovieRecommendation[]; titles: string[] }> => {
+/**
+ * Executes a prompt across a cascade of Gemini models, automatically falling back
+ * if a model encounters 503 high demand, 429 rate limits, or transient errors.
+ */
+const callGeminiWithFallback = async (
+    prompt: string,
+    temperature = 0.7,
+    maxOutputTokens = 2048
+): Promise<string | null> => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey || apiKey.trim().length <= 5) return null;
 
-    if (apiKey && apiKey.trim().length > 5) {
+    for (let i = 0; i < GEMINI_MODELS.length; i++) {
+        const model = GEMINI_MODELS[i];
         try {
-            console.info(`[Gemini AI API] 🤖 POST /v1beta/models/${GEMINI_MODEL}:generateContent for query: "${query}"`);
-            const prompt = `You are an expert AI Movie Recommendation Engine. 
-The user is looking for movies based on this request: "${query}".
-Suggest exactly 5 unique, highly relevant movies that perfectly match this vibe.
-Respond ONLY with a valid JSON array containing exactly 5 objects, with NO markdown formatting, NO backticks, and NO extra text.
-Each object must have these exact keys:
-- "title": string (the exact movie title)
-- "genre": string (e.g. "Sci-Fi / Thriller")
-- "reason": string (a short 1-2 sentence compelling reason why the user will love it)`;
-
+            console.info(`[Gemini AI API] 🤖 [Model ${i + 1}/${GEMINI_MODELS.length}: ${model}] POST /v1beta/models/${model}:generateContent`);
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text: prompt }] }],
                         generationConfig: {
-                            temperature: 0.7,
-                            maxOutputTokens: 2048,
+                            temperature,
+                            maxOutputTokens,
                         },
                     }),
                 }
             );
 
-            console.info(`[Gemini AI API] 📥 Response status [${response.status}]`);
+            console.info(`[Gemini AI API] 📥 Model [${model}] status [${response.status}]`);
 
             if (response.ok) {
                 const data = await response.json();
@@ -89,11 +95,45 @@ Each object must have these exact keys:
                     .map((p: any) => p.text)
                     .join('');
 
+                if (rawText && rawText.trim().length > 0) {
+                    return rawText;
+                }
+            } else {
+                console.warn(`[Gemini AI API] ⚠️ Model [${model}] returned status ${response.status}, trying fallback model...`);
+            }
+        } catch (err) {
+            console.warn(`[Gemini AI API] ⚠️ Error requesting model [${model}]:`, err);
+        }
+    }
+
+    console.warn(`[Gemini AI API] ❌ All ${GEMINI_MODELS.length} Gemini models exhausted`);
+    return null;
+};
+
+export const getGeminiMovieRecommendations = async (
+    query: string
+): Promise<{ recommendations: GeminiMovieRecommendation[]; titles: string[] }> => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+    if (apiKey && apiKey.trim().length > 5) {
+        try {
+            const prompt = `You are an expert AI Movie Recommendation Engine. 
+The user is looking for movies based on this request: "${query}".
+Suggest exactly 5 unique, highly relevant movies that perfectly match this vibe.
+Respond ONLY with a valid JSON array containing exactly 5 objects, with NO markdown formatting, NO backticks, and NO extra text.
+Each object must have these exact keys:
+- "title": string (the exact movie title)
+- "genre": string (e.g. "Sci-Fi / Thriller")
+- "reason": string (a short 1-2 sentence compelling reason why the user will love it)`;
+
+            const rawText = await callGeminiWithFallback(prompt, 0.7, 2048);
+
+            if (rawText) {
                 const cleanedText = cleanJsonString(rawText);
                 const parsed = JSON.parse(cleanedText) as GeminiMovieRecommendation[];
                 if (Array.isArray(parsed) && parsed.length > 0) {
                     console.info(
-                        `[Gemini AI API] ✅ Received ${parsed.length} AI movie recommendations:`,
+                        `[Gemini AI API] ✅ Successfully generated ${parsed.length} AI recommendations:`,
                         parsed.map((item) => item.title)
                     );
                     return {
@@ -101,11 +141,9 @@ Each object must have these exact keys:
                         titles: parsed.map((item) => item.title),
                     };
                 }
-            } else {
-                console.warn(`[Gemini AI API] ⚠️ Gemini returned status ${response.status}, switching to curated recommendations`);
             }
         } catch (err) {
-            console.warn("[Gemini AI API] ⚠️ Gemini API call failed, switching to curated recommendations:", err);
+            console.warn("[Gemini AI API] ⚠️ Failed to parse AI recommendations, falling back to curated list:", err);
         }
     } else {
         console.info(`[Gemini AI Service] ℹ️ VITE_GEMINI_API_KEY not provided, using curated AI engine fallback for query: "${query}"`);
@@ -151,7 +189,6 @@ export const getGeminiMovieDetails = async (
     if (!apiKey || apiKey.trim().length <= 5) return null;
 
     try {
-        console.info(`[Gemini AI API] 🤖 Fetching deep metadata for movie: "${title}" via ${GEMINI_MODEL}`);
         const prompt = `You are a film database API. Provide verified, accurate metadata for the movie "${title}".
 Respond ONLY with a raw JSON object with NO markdown formatting, NO backticks, and NO commentary.
 Exact JSON structure required:
@@ -171,29 +208,8 @@ Exact JSON structure required:
   "trailerQuery": string (e.g. "${title} official trailer")
 }`;
 
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        temperature: 0.2,
-                        maxOutputTokens: 2048,
-                    },
-                }),
-            }
-        );
-
-        if (!response.ok) return null;
-
-        const data = await response.json();
-        const parts = data?.candidates?.[0]?.content?.parts || [];
-        const rawText = parts
-            .filter((p: any) => typeof p.text === 'string')
-            .map((p: any) => p.text)
-            .join('');
+        const rawText = await callGeminiWithFallback(prompt, 0.2, 2048);
+        if (!rawText) return null;
 
         const cleanedText = cleanJsonString(rawText);
         const parsed = JSON.parse(cleanedText);
