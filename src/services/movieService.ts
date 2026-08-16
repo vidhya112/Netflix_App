@@ -3,6 +3,11 @@ import { getGeminiMovieDetails } from './geminiService';
 import { searchTVMaze, getTVMazeCast } from './tvmazeService';
 import { fetchOMDBMovie, convertOMDBToMovie, parseOMDBCast } from './omdbService';
 import { fetchLiveDailyCollection, getDailyCache } from './dailyCacheService';
+import netflixSvg from '../assets/providers/netflix.svg';
+import appletvSvg from '../assets/providers/appletv.svg';
+import disneySvg from '../assets/providers/disney.svg';
+import primeSvg from '../assets/providers/prime.svg';
+import hboSvg from '../assets/providers/hbo.svg';
 
 export const getNowPlayingMovies = async (): Promise<Movie[]> => {
     console.info('[Movie Engine] 🎬 Fetching live "Now Playing" collection...');
@@ -151,20 +156,20 @@ export const getWatchProviders = async (movieId: number, movieTitle?: string): P
     const titleLower = movieTitle?.toLowerCase() || '';
 
     if (titleLower.includes('disney') || titleLower.includes('marvel') || titleLower.includes('pixar') || titleLower.includes('star wars') || titleLower.includes('coco') || titleLower.includes('wall-e')) {
-        return [{ provider_id: 337, provider_name: 'Disney+', logo_path: '/providers/disney.svg' }];
+        return [{ provider_id: 337, provider_name: 'Disney+', logo_path: disneySvg }];
     }
     if (titleLower.includes('apple') || titleLower.includes('ted lasso') || titleLower.includes('severance')) {
-        return [{ provider_id: 2, provider_name: 'Apple TV+', logo_path: '/providers/appletv.svg' }];
+        return [{ provider_id: 2, provider_name: 'Apple TV+', logo_path: appletvSvg }];
     }
     if (titleLower.includes('warner') || titleLower.includes('dc') || titleLower.includes('batman') || titleLower.includes('hbo') || titleLower.includes('dark knight') || titleLower.includes('matrix')) {
-        return [{ provider_id: 384, provider_name: 'HBO Max', logo_path: '/providers/hbo.svg' }];
+        return [{ provider_id: 384, provider_name: 'HBO Max', logo_path: hboSvg }];
     }
     if (titleLower.includes('amazon') || titleLower.includes('prime') || titleLower.includes('rings of power') || titleLower.includes('interstellar') || titleLower.includes('oppenheimer') || titleLower.includes('superbad')) {
-        return [{ provider_id: 119, provider_name: 'Prime Video', logo_path: '/providers/prime.svg' }];
+        return [{ provider_id: 119, provider_name: 'Prime Video', logo_path: primeSvg }];
     }
 
     // Default to Netflix
-    return [{ provider_id: 8, provider_name: 'Netflix', logo_path: '/providers/netflix.svg' }];
+    return [{ provider_id: 8, provider_name: 'Netflix', logo_path: netflixSvg }];
 };
 
 export const searchMovies = async (query: string): Promise<Movie[]> => {

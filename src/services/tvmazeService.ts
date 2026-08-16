@@ -1,4 +1,9 @@
 import { Movie, MovieDetails, CastMember, WatchProvider } from '../types/movie.types';
+import netflixSvg from '../assets/providers/netflix.svg';
+import appletvSvg from '../assets/providers/appletv.svg';
+import disneySvg from '../assets/providers/disney.svg';
+import primeSvg from '../assets/providers/prime.svg';
+import hboSvg from '../assets/providers/hbo.svg';
 
 export interface TVMazeShow {
     id: number;
@@ -141,20 +146,20 @@ export const getTVMazeProviders = (show?: TVMazeShow): WatchProvider[] => {
     const lower = channelName.toLowerCase();
 
     if (lower.includes("netflix")) {
-        return [{ provider_id: 8, provider_name: "Netflix", logo_path: "/providers/netflix.svg" }];
+        return [{ provider_id: 8, provider_name: "Netflix", logo_path: netflixSvg }];
     }
     if (lower.includes("prime") || lower.includes("amazon")) {
-        return [{ provider_id: 119, provider_name: "Prime Video", logo_path: "/providers/prime.svg" }];
+        return [{ provider_id: 119, provider_name: "Prime Video", logo_path: primeSvg }];
     }
     if (lower.includes("apple")) {
-        return [{ provider_id: 2, provider_name: "Apple TV+", logo_path: "/providers/appletv.svg" }];
+        return [{ provider_id: 2, provider_name: "Apple TV+", logo_path: appletvSvg }];
     }
     if (lower.includes("hbo") || lower.includes("max")) {
-        return [{ provider_id: 384, provider_name: "HBO Max", logo_path: "/providers/hbo.svg" }];
+        return [{ provider_id: 384, provider_name: "HBO Max", logo_path: hboSvg }];
     }
     if (lower.includes("disney") || lower.includes("hulu")) {
-        return [{ provider_id: 337, provider_name: "Disney+", logo_path: "/providers/disney.svg" }];
+        return [{ provider_id: 337, provider_name: "Disney+", logo_path: disneySvg }];
     }
 
-    return [{ provider_id: 8, provider_name: "Netflix", logo_path: "/providers/netflix.svg" }];
+    return [{ provider_id: 8, provider_name: "Netflix", logo_path: netflixSvg }];
 };

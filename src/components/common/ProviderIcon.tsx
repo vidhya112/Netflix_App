@@ -1,5 +1,10 @@
 import React, { useState } from "react";
 import { Tv } from "lucide-react";
+import netflixSvg from "../../assets/providers/netflix.svg";
+import appletvSvg from "../../assets/providers/appletv.svg";
+import disneySvg from "../../assets/providers/disney.svg";
+import primeSvg from "../../assets/providers/prime.svg";
+import hboSvg from "../../assets/providers/hbo.svg";
 
 interface ProviderIconProps {
     providerName: string;
@@ -14,19 +19,25 @@ export const ProviderIcon: React.FC<ProviderIconProps> = ({
 }) => {
     const [imageError, setImageError] = useState(false);
     const name = providerName.toLowerCase();
+    const logoLower = (logoPath || "").toLowerCase();
 
-    // Map to crisp local vector SVGs for top streaming platforms
-    let imageSrc = logoPath;
+    // Map to bundled vector SVGs for top streaming platforms
+    let imageSrc: string | undefined = undefined;
 
-    if (name.includes("netflix")) imageSrc = "/providers/netflix.svg";
-    else if (name.includes("apple")) imageSrc = "/providers/appletv.svg";
-    else if (name.includes("disney")) imageSrc = "/providers/disney.svg";
-    else if (name.includes("prime") || name.includes("amazon")) imageSrc = "/providers/prime.svg";
-    else if (name.includes("hbo") || name.includes("max")) imageSrc = "/providers/hbo.svg";
-    else if (logoPath) {
-        imageSrc = (logoPath.startsWith("http") || logoPath.startsWith("/"))
+    if (name.includes("netflix") || logoLower.includes("netflix")) {
+        imageSrc = netflixSvg;
+    } else if (name.includes("apple") || logoLower.includes("appletv") || logoLower.includes("apple")) {
+        imageSrc = appletvSvg;
+    } else if (name.includes("disney") || logoLower.includes("disney")) {
+        imageSrc = disneySvg;
+    } else if (name.includes("prime") || name.includes("amazon") || logoLower.includes("prime")) {
+        imageSrc = primeSvg;
+    } else if (name.includes("hbo") || name.includes("max") || logoLower.includes("hbo")) {
+        imageSrc = hboSvg;
+    } else if (logoPath) {
+        imageSrc = (logoPath.startsWith("http://") || logoPath.startsWith("https://") || logoPath.startsWith("data:"))
             ? logoPath
-            : `https://image.tmdb.org/t/p/w200${logoPath}`;
+            : `https://image.tmdb.org/t/p/w200${logoPath.startsWith("/") ? logoPath : `/${logoPath}`}`;
     }
 
     if (imageSrc && !imageError) {
