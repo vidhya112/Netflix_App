@@ -266,9 +266,27 @@ export const subscribeToWatchlist = (
     onUpdate: (items: WatchlistItem[]) => void
 ): (() => void) => {
     if (!uid) {
-        onUpdate([]);
         return () => {};
     }
+
+    const loadLocal = () => {
+        try {
+            const userKey = `${WATCHLIST_LOCAL_KEY}_${uid}`;
+            const globalKey = "netflix_gpt_watchlist";
+            const userStored = localStorage.getItem(userKey);
+            const globalStored = localStorage.getItem(globalKey);
+            const stored = userStored || globalStored;
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    onUpdate(parsed);
+                }
+            }
+        } catch {
+            // ignore
+        }
+    };
+    loadLocal();
 
     if (db && isRealAuthUser(uid)) {
         try {
@@ -277,13 +295,20 @@ export const subscribeToWatchlist = (
                 watchlistCol,
                 (snapshot) => {
                     const items: WatchlistItem[] = [];
-                    snapshot.forEach((doc) => {
-                        items.push(doc.data() as WatchlistItem);
+                    snapshot.forEach((d) => {
+                        items.push(d.data() as WatchlistItem);
                     });
                     onUpdate(items);
+                    try {
+                        localStorage.setItem(`${WATCHLIST_LOCAL_KEY}_${uid}`, JSON.stringify(items));
+                        localStorage.setItem("netflix_gpt_watchlist", JSON.stringify(items));
+                    } catch {
+                        // ignore
+                    }
                 },
                 (err) => {
-                    console.warn("Watchlist onSnapshot error, using local fallback:", err);
+                    console.warn("Watchlist onSnapshot fallback to local storage:", err);
+                    loadLocal();
                 }
             );
             return unsubscribe;
@@ -292,19 +317,8 @@ export const subscribeToWatchlist = (
         }
     }
 
-    // Local Storage fallback
-    const loadLocal = () => {
-        try {
-            const stored = localStorage.getItem(`${WATCHLIST_LOCAL_KEY}_${uid}`);
-            onUpdate(stored ? JSON.parse(stored) : []);
-        } catch {
-            onUpdate([]);
-        }
-    };
-    loadLocal();
-
     const storageHandler = (e: StorageEvent) => {
-        if (e.key === `${WATCHLIST_LOCAL_KEY}_${uid}`) {
+        if (e.key === "netflix_gpt_watchlist" || e.key === `${WATCHLIST_LOCAL_KEY}_${uid}`) {
             loadLocal();
         }
     };
@@ -339,11 +353,14 @@ export const addMovieToFirestoreWatchlist = async (
 
     // Local fallback
     try {
-        const stored = localStorage.getItem(`${WATCHLIST_LOCAL_KEY}_${uid}`);
+        const userKey = `${WATCHLIST_LOCAL_KEY}_${uid}`;
+        const globalKey = "netflix_gpt_watchlist";
+        const stored = localStorage.getItem(userKey) || localStorage.getItem(globalKey);
         const items: WatchlistItem[] = stored ? JSON.parse(stored) : [];
-        if (!items.some((item) => item.id === movie.id)) {
+        if (!items.some((item) => String(item.id) === String(movie.id))) {
             items.unshift({ ...movie, addedAt: new Date().toISOString() });
-            localStorage.setItem(`${WATCHLIST_LOCAL_KEY}_${uid}`, JSON.stringify(items));
+            localStorage.setItem(userKey, JSON.stringify(items));
+            localStorage.setItem(globalKey, JSON.stringify(items));
         }
     } catch {
         // ignore
@@ -371,11 +388,14 @@ export const removeMovieFromFirestoreWatchlist = async (
 
     // Local fallback
     try {
-        const stored = localStorage.getItem(`${WATCHLIST_LOCAL_KEY}_${uid}`);
+        const userKey = `${WATCHLIST_LOCAL_KEY}_${uid}`;
+        const globalKey = "netflix_gpt_watchlist";
+        const stored = localStorage.getItem(userKey) || localStorage.getItem(globalKey);
         if (stored) {
             let items: WatchlistItem[] = JSON.parse(stored);
             items = items.filter((item) => String(item.id) !== String(movieId));
-            localStorage.setItem(`${WATCHLIST_LOCAL_KEY}_${uid}`, JSON.stringify(items));
+            localStorage.setItem(userKey, JSON.stringify(items));
+            localStorage.setItem(globalKey, JSON.stringify(items));
         }
     } catch {
         // ignore

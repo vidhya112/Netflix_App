@@ -38,7 +38,9 @@ const watchlistSlice = createSlice({
             }
         },
         addToWatchlist: (state, action: PayloadAction<Movie>) => {
-            const exists = state.items.some((item) => item.id === action.payload.id);
+            const exists = state.items.some(
+                (item) => String(item.id) === String(action.payload.id)
+            );
             if (!exists) {
                 state.items.unshift(action.payload);
                 try {
@@ -47,22 +49,24 @@ const watchlistSlice = createSlice({
                     console.error(e);
                 }
 
-                // Sync to Cloud Firestore
+                // Sync to Cloud Firestore if user is active
                 const currentUid = auth?.currentUser?.uid;
                 if (currentUid) {
                     addMovieToFirestoreWatchlist(currentUid, action.payload as any).catch(() => {});
                 }
             }
         },
-        removeFromWatchlist: (state, action: PayloadAction<number>) => {
-            state.items = state.items.filter((item) => item.id !== action.payload);
+        removeFromWatchlist: (state, action: PayloadAction<number | string>) => {
+            state.items = state.items.filter(
+                (item) => String(item.id) !== String(action.payload)
+            );
             try {
                 localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.items));
             } catch (e) {
                 console.error(e);
             }
 
-            // Sync to Cloud Firestore
+            // Sync to Cloud Firestore if user is active
             const currentUid = auth?.currentUser?.uid;
             if (currentUid) {
                 removeMovieFromFirestoreWatchlist(currentUid, action.payload).catch(() => {});

@@ -79,9 +79,7 @@ export const Header: React.FC<HeaderProps> = ({ showNavigation = true }) => {
 
     const handleNavClick = (tab: string) => {
         dispatch(setActiveNavTab(tab));
-        if (tab === "home" || tab === "movies" || tab === "tv") {
-            dispatch(setGptSearchView(false));
-        }
+        dispatch(setGptSearchView(false));
     };
 
     return (
@@ -284,6 +282,7 @@ export const Header: React.FC<HeaderProps> = ({ showNavigation = true }) => {
                                     <div className="border-t border-white/10 pt-2 space-y-1">
                                         <button
                                             onClick={() => {
+                                                dispatch(setGptSearchView(false));
                                                 dispatch(setActiveNavTab("watchlist"));
                                                 setShowProfileMenu(false);
                                             }}
