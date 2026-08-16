@@ -4,6 +4,7 @@ import { RootState } from "../../store/appStore";
 import { toggleGptSearchView, setGptSearchView } from "../../features/gptSlice";
 import { changeLanguage, setActiveNavTab } from "../../features/configSlice";
 import { removeUser, setActiveProfile } from "../../features/userSlice";
+import { clearWatchlist } from "../../features/watchlistSlice";
 import { auth, signOut } from "../../utils/firebase";
 import { LOGO, USER_AVATARS, SUPPORTED_LANGUAGES } from "../../utils/constant";
 import { language } from "../../utils/languageConstant";
@@ -64,6 +65,13 @@ export const Header: React.FC<HeaderProps> = ({ showNavigation = true }) => {
     }, []);
 
     const handleSignOut = () => {
+        try {
+            localStorage.removeItem("netflix_gpt_watchlist");
+            localStorage.removeItem("netflix_gpt_device_sessions");
+        } catch {
+            // ignore
+        }
+        dispatch(clearWatchlist());
         if (auth) {
             signOut(auth)
                 .then(() => {

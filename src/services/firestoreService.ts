@@ -12,10 +12,6 @@ import { auth, db } from "../utils/firebase";
 import { UserSession } from "../types/user.types";
 import { WatchlistItem } from "../types/movie.types";
 
-const SESSIONS_LOCAL_KEY = "netflix_gpt_device_sessions";
-const WATCHLIST_LOCAL_KEY = "netflix_gpt_local_watchlist";
-const GPT_HISTORY_LOCAL_KEY = "netflix_gpt_search_history";
-
 /**
  * Check if the user is authenticated through real Firebase Auth
  */
@@ -32,10 +28,15 @@ export const getClientDeviceInfo = (): {
     browser: string;
     os: string;
 } => {
+    // Generate or fetch device identifier
     let deviceId = localStorage.getItem("netflix_gpt_device_id");
     if (!deviceId) {
         deviceId = `dev_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
-        localStorage.setItem("netflix_gpt_device_id", deviceId);
+        try {
+            localStorage.setItem("netflix_gpt_device_id", deviceId);
+        } catch {
+            // ignore
+        }
     }
 
     const ua = navigator.userAgent;
@@ -60,7 +61,7 @@ export const getClientDeviceInfo = (): {
 };
 
 /**
- * Sync user profile to Firestore
+ * Sync user profile to Firestore (Strictly scoped to users/{uid})
  */
 export const syncUserProfileToFirestore = async (
     uid: string,
@@ -84,15 +85,14 @@ export const syncUserProfileToFirestore = async (
                 },
                 { merge: true }
             );
-            return;
         } catch (err) {
-            console.warn("Firestore syncUserProfile error, falling back:", err);
+            console.warn("Firestore syncUserProfile error:", err);
         }
     }
 };
 
 /**
- * Register a login session in Firestore
+ * Register a login session in Firestore (Strictly scoped to users/{uid}/sessions/{sessionId})
  */
 export const registerUserSession = async (uid: string): Promise<UserSession> => {
     const { deviceId, deviceName, browser, os } = getClientDeviceInfo();
@@ -129,22 +129,11 @@ export const registerUserSession = async (uid: string): Promise<UserSession> => 
         }
     }
 
-    // Local Storage Session Management Fallback
-    try {
-        const stored = localStorage.getItem(`${SESSIONS_LOCAL_KEY}_${uid}`);
-        let sessions: UserSession[] = stored ? JSON.parse(stored) : [];
-        sessions = sessions.filter((s) => s.id !== sessionId);
-        sessions.unshift(session);
-        localStorage.setItem(`${SESSIONS_LOCAL_KEY}_${uid}`, JSON.stringify(sessions));
-    } catch {
-        // ignore
-    }
-
     return session;
 };
 
 /**
- * Fetch all active sessions for a user
+ * Fetch all active sessions for a user (Strictly scoped to users/{uid}/sessions)
  */
 export const fetchUserSessions = async (uid: string): Promise<UserSession[]> => {
     if (!uid) return [];
@@ -170,21 +159,7 @@ export const fetchUserSessions = async (uid: string): Promise<UserSession[]> => 
         }
     }
 
-    // Fallback
-    try {
-        const stored = localStorage.getItem(`${SESSIONS_LOCAL_KEY}_${uid}`);
-        if (stored) {
-            const sessions: UserSession[] = JSON.parse(stored);
-            return sessions.map((s) => ({
-                ...s,
-                isCurrentSession: s.id === currentSessionId,
-            }));
-        }
-    } catch {
-        // ignore
-    }
-
-    // Default current session if none exist
+    // Default current session for guest / fallback
     const defaultSession = await registerUserSession(uid);
     return [defaultSession];
 };
@@ -202,21 +177,9 @@ export const revokeUserSession = async (uid: string, sessionId: string): Promise
                 status: "revoked",
                 revokedAt: serverTimestamp(),
             });
-            return;
         } catch (err) {
-            console.warn("Firestore revoke session fallback:", err);
+            console.warn("Firestore revoke session error:", err);
         }
-    }
-
-    try {
-        const stored = localStorage.getItem(`${SESSIONS_LOCAL_KEY}_${uid}`);
-        if (stored) {
-            let sessions: UserSession[] = JSON.parse(stored);
-            sessions = sessions.map((s) => (s.id === sessionId ? { ...s, status: "revoked" } : s));
-            localStorage.setItem(`${SESSIONS_LOCAL_KEY}_${uid}`, JSON.stringify(sessions));
-        }
-    } catch {
-        // ignore
     }
 };
 
@@ -240,54 +203,25 @@ export const revokeAllOtherSessions = async (uid: string): Promise<void> => {
                     });
                 }
             }
-            return;
         } catch (err) {
-            console.warn("Firestore revoke all other sessions fallback:", err);
+            console.warn("Firestore revoke all other sessions error:", err);
         }
-    }
-
-    try {
-        const stored = localStorage.getItem(`${SESSIONS_LOCAL_KEY}_${uid}`);
-        if (stored) {
-            let sessions: UserSession[] = JSON.parse(stored);
-            sessions = sessions.filter((s) => s.id === currentSessionId);
-            localStorage.setItem(`${SESSIONS_LOCAL_KEY}_${uid}`, JSON.stringify(sessions));
-        }
-    } catch {
-        // ignore
     }
 };
 
 /**
- * Real-time Watchlist Subscription
+ * Real-time Watchlist Subscription (Strictly scoped to users/{uid}/watchlist)
  */
 export const subscribeToWatchlist = (
     uid: string,
     onUpdate: (items: WatchlistItem[]) => void
 ): (() => void) => {
     if (!uid) {
+        onUpdate([]);
         return () => {};
     }
 
-    const loadLocal = () => {
-        try {
-            const userKey = `${WATCHLIST_LOCAL_KEY}_${uid}`;
-            const globalKey = "netflix_gpt_watchlist";
-            const userStored = localStorage.getItem(userKey);
-            const globalStored = localStorage.getItem(globalKey);
-            const stored = userStored || globalStored;
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    onUpdate(parsed);
-                }
-            }
-        } catch {
-            // ignore
-        }
-    };
-    loadLocal();
-
+    // Real authenticated user ➔ Cloud Firestore is the absolute source of truth
     if (db && isRealAuthUser(uid)) {
         try {
             const watchlistCol = collection(db, "users", uid, "watchlist");
@@ -299,38 +233,27 @@ export const subscribeToWatchlist = (
                         items.push(d.data() as WatchlistItem);
                     });
                     onUpdate(items);
-                    try {
-                        localStorage.setItem(`${WATCHLIST_LOCAL_KEY}_${uid}`, JSON.stringify(items));
-                        localStorage.setItem("netflix_gpt_watchlist", JSON.stringify(items));
-                    } catch {
-                        // ignore
-                    }
                 },
                 (err) => {
-                    console.warn("Watchlist onSnapshot fallback to local storage:", err);
-                    loadLocal();
+                    console.warn("Watchlist onSnapshot error:", err);
+                    onUpdate([]);
                 }
             );
             return unsubscribe;
         } catch (e) {
             console.warn("Firestore subscribeToWatchlist failed:", e);
+            onUpdate([]);
+            return () => {};
         }
     }
 
-    const storageHandler = (e: StorageEvent) => {
-        if (e.key === "netflix_gpt_watchlist" || e.key === `${WATCHLIST_LOCAL_KEY}_${uid}`) {
-            loadLocal();
-        }
-    };
-    window.addEventListener("storage", storageHandler);
-
-    return () => {
-        window.removeEventListener("storage", storageHandler);
-    };
+    // Guest / Offline Demo Mode ➔ Strictly isolated to that guest uid in memory
+    onUpdate([]);
+    return () => {};
 };
 
 /**
- * Add movie to Watchlist in Firestore
+ * Add movie to Watchlist in Firestore (Strictly users/{uid}/watchlist/{movieId})
  */
 export const addMovieToFirestoreWatchlist = async (
     uid: string,
@@ -345,30 +268,14 @@ export const addMovieToFirestoreWatchlist = async (
                 ...movie,
                 addedAt: movie.addedAt || new Date().toISOString(),
             });
-            return;
         } catch (err) {
-            console.warn("Firestore addMovieToWatchlist error, saving locally:", err);
+            console.warn("Firestore addMovieToWatchlist error:", err);
         }
-    }
-
-    // Local fallback
-    try {
-        const userKey = `${WATCHLIST_LOCAL_KEY}_${uid}`;
-        const globalKey = "netflix_gpt_watchlist";
-        const stored = localStorage.getItem(userKey) || localStorage.getItem(globalKey);
-        const items: WatchlistItem[] = stored ? JSON.parse(stored) : [];
-        if (!items.some((item) => String(item.id) === String(movie.id))) {
-            items.unshift({ ...movie, addedAt: new Date().toISOString() });
-            localStorage.setItem(userKey, JSON.stringify(items));
-            localStorage.setItem(globalKey, JSON.stringify(items));
-        }
-    } catch {
-        // ignore
     }
 };
 
 /**
- * Remove movie from Watchlist in Firestore
+ * Remove movie from Watchlist in Firestore (Strictly users/{uid}/watchlist/{movieId})
  */
 export const removeMovieFromFirestoreWatchlist = async (
     uid: string,
@@ -380,30 +287,14 @@ export const removeMovieFromFirestoreWatchlist = async (
         try {
             const movieRef = doc(db, "users", uid, "watchlist", String(movieId));
             await deleteDoc(movieRef);
-            return;
         } catch (err) {
-            console.warn("Firestore removeMovieFromWatchlist error, removing locally:", err);
+            console.warn("Firestore removeMovieFromWatchlist error:", err);
         }
-    }
-
-    // Local fallback
-    try {
-        const userKey = `${WATCHLIST_LOCAL_KEY}_${uid}`;
-        const globalKey = "netflix_gpt_watchlist";
-        const stored = localStorage.getItem(userKey) || localStorage.getItem(globalKey);
-        if (stored) {
-            let items: WatchlistItem[] = JSON.parse(stored);
-            items = items.filter((item) => String(item.id) !== String(movieId));
-            localStorage.setItem(userKey, JSON.stringify(items));
-            localStorage.setItem(globalKey, JSON.stringify(items));
-        }
-    } catch {
-        // ignore
     }
 };
 
 /**
- * Save GPT Recommendation Search to Firestore
+ * Save GPT Recommendation Search to Firestore (Strictly users/{uid}/gptHistory/{historyId})
  */
 export const saveGptSearchToFirestore = async (
     uid: string,
@@ -421,18 +312,8 @@ export const saveGptSearchToFirestore = async (
                 results: movieNames,
                 timestamp: serverTimestamp(),
             });
-            return;
         } catch (err) {
-            console.warn("Firestore saveGptSearch fallback:", err);
+            console.warn("Firestore saveGptSearch error:", err);
         }
-    }
-
-    try {
-        const stored = localStorage.getItem(`${GPT_HISTORY_LOCAL_KEY}_${uid}`);
-        const history = stored ? JSON.parse(stored) : [];
-        history.unshift({ query: searchQuery, results: movieNames, timestamp: new Date().toISOString() });
-        localStorage.setItem(`${GPT_HISTORY_LOCAL_KEY}_${uid}`, JSON.stringify(history.slice(0, 20)));
-    } catch {
-        // ignore
     }
 };

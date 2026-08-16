@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { auth, onAuthStateChanged } from "../../utils/firebase";
-import { setUser } from "../../features/userSlice";
+import { setUser, removeUser } from "../../features/userSlice";
+import { clearWatchlist } from "../../features/watchlistSlice";
 import { RootState } from "../../store/appStore";
 import { Browse } from "./Browse";
 import { Login } from "./Login";
@@ -56,6 +57,9 @@ export const Body: React.FC = () => {
                             jwtToken: token,
                         })
                     );
+                } else {
+                    dispatch(removeUser());
+                    dispatch(clearWatchlist());
                 }
             });
 

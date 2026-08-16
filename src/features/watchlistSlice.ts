@@ -6,23 +6,12 @@ import {
     removeMovieFromFirestoreWatchlist,
 } from "../services/firestoreService";
 
-const LOCAL_STORAGE_KEY = "netflix_gpt_watchlist";
-
-const loadInitialWatchlist = (): Movie[] => {
-    try {
-        const data = localStorage.getItem(LOCAL_STORAGE_KEY);
-        return data ? JSON.parse(data) : [];
-    } catch {
-        return [];
-    }
-};
-
 interface WatchlistState {
     items: Movie[];
 }
 
 const initialState: WatchlistState = {
-    items: loadInitialWatchlist(),
+    items: [],
 };
 
 const watchlistSlice = createSlice({
@@ -31,11 +20,6 @@ const watchlistSlice = createSlice({
     reducers: {
         setWatchlistItems: (state, action: PayloadAction<Movie[]>) => {
             state.items = action.payload;
-            try {
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(action.payload));
-            } catch (e) {
-                console.error(e);
-            }
         },
         addToWatchlist: (state, action: PayloadAction<Movie>) => {
             const exists = state.items.some(
@@ -43,13 +27,8 @@ const watchlistSlice = createSlice({
             );
             if (!exists) {
                 state.items.unshift(action.payload);
-                try {
-                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.items));
-                } catch (e) {
-                    console.error(e);
-                }
 
-                // Sync to Cloud Firestore if user is active
+                // Sync strictly to current authenticated user's Cloud Firestore
                 const currentUid = auth?.currentUser?.uid;
                 if (currentUid) {
                     addMovieToFirestoreWatchlist(currentUid, action.payload as any).catch(() => {});
@@ -60,13 +39,8 @@ const watchlistSlice = createSlice({
             state.items = state.items.filter(
                 (item) => String(item.id) !== String(action.payload)
             );
-            try {
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.items));
-            } catch (e) {
-                console.error(e);
-            }
 
-            // Sync to Cloud Firestore if user is active
+            // Sync strictly to current authenticated user's Cloud Firestore
             const currentUid = auth?.currentUser?.uid;
             if (currentUid) {
                 removeMovieFromFirestoreWatchlist(currentUid, action.payload).catch(() => {});
@@ -74,11 +48,6 @@ const watchlistSlice = createSlice({
         },
         clearWatchlist: (state) => {
             state.items = [];
-            try {
-                localStorage.removeItem(LOCAL_STORAGE_KEY);
-            } catch (e) {
-                console.error(e);
-            }
         },
     },
 });
