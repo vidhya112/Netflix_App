@@ -8,12 +8,18 @@ import {
 } from "../../utils/firebase";
 import { setUser } from "../../features/userSlice";
 import { showToast } from "../../features/configSlice";
+import {
+    registerUserSession,
+    syncUserProfileToFirestore,
+} from "../../services/firestoreService";
 import { Header } from "./Header";
 import { checkValidData } from "../../utils/validate";
 import { BACKGROUND_IMAGE, USER_AVATARS } from "../../utils/constant";
 import { language } from "../../utils/languageConstant";
 import { RootState } from "../../store/appStore";
-import { AlertCircle, Eye, EyeOff, UserCheck } from "lucide-react";
+import { ForgotPasswordModal } from "../modal/ForgotPasswordModal";
+import { ResetPasswordModal } from "../modal/ResetPasswordModal";
+import { AlertCircle, Eye, EyeOff, UserCheck, KeyRound } from "lucide-react";
 
 export const Login: React.FC = () => {
     const dispatch = useDispatch();
@@ -25,6 +31,11 @@ export const Login: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Modal states
+    const [showForgotModal, setShowForgotModal] = useState(false);
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [resetCodeForModal, setResetCodeForModal] = useState<string | undefined>(undefined);
+
     const emailRef = useRef<HTMLInputElement>(null);
     const passwordRef = useRef<HTMLInputElement>(null);
     const nameRef = useRef<HTMLInputElement>(null);
@@ -34,13 +45,27 @@ export const Login: React.FC = () => {
         setErrorMessage(null);
     };
 
-    const handleGuestLogin = () => {
+    const handleGuestLogin = async () => {
+        setIsSubmitting(true);
         const guestUser = {
             uid: "guest_demo_user_123",
             email: "guest.reviewer@netflixgpt.demo",
             displayName: "Guest Member",
             photoURL: USER_AVATARS[0].url,
+            jwtToken: `demo_jwt_${Date.now()}`,
         };
+
+        try {
+            await registerUserSession(guestUser.uid);
+            await syncUserProfileToFirestore(guestUser.uid, {
+                email: guestUser.email,
+                displayName: guestUser.displayName,
+                photoURL: guestUser.photoURL,
+            });
+        } catch {
+            // ignore
+        }
+
         dispatch(setUser(guestUser));
         dispatch(
             showToast({
@@ -48,6 +73,7 @@ export const Login: React.FC = () => {
                 type: "success",
             })
         );
+        setIsSubmitting(false);
     };
 
     const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -64,12 +90,6 @@ export const Login: React.FC = () => {
         setIsSubmitting(true);
         setErrorMessage(null);
 
-        if (!auth) {
-            setErrorMessage("Authentication service is currently unavailable. Please check your Firebase configuration.");
-            setIsSubmitting(false);
-            return;
-        }
-
         try {
             if (!isSignInForm) {
                 // Sign Up Flow
@@ -81,12 +101,27 @@ export const Login: React.FC = () => {
                     photoURL: USER_AVATARS[0].url,
                 });
 
+                let token: string | null = null;
+                if (user.getIdToken) {
+                    token = await user.getIdToken();
+                }
+
+                // Register session & profile in Firestore
+                await registerUserSession(user.uid);
+                await syncUserProfileToFirestore(user.uid, {
+                    email: user.email,
+                    displayName: name || user.displayName,
+                    photoURL: USER_AVATARS[0].url,
+                    lang: langKey,
+                });
+
                 dispatch(
                     setUser({
                         uid: user.uid,
                         email: user.email,
                         displayName: name || user.displayName,
                         photoURL: USER_AVATARS[0].url,
+                        jwtToken: token,
                     })
                 );
                 dispatch(showToast({ message: "Account created successfully!", type: "success" }));
@@ -95,12 +130,26 @@ export const Login: React.FC = () => {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
 
+                let token: string | null = null;
+                if (user.getIdToken) {
+                    token = await user.getIdToken();
+                }
+
+                // Register session & profile in Firestore
+                await registerUserSession(user.uid);
+                await syncUserProfileToFirestore(user.uid, {
+                    email: user.email,
+                    displayName: user.displayName || email.split("@")[0],
+                    photoURL: user.photoURL || USER_AVATARS[0].url,
+                });
+
                 dispatch(
                     setUser({
                         uid: user.uid,
                         email: user.email,
                         displayName: user.displayName || email.split("@")[0],
                         photoURL: user.photoURL || USER_AVATARS[0].url,
+                        jwtToken: token,
                     })
                 );
                 dispatch(showToast({ message: "Welcome back!", type: "success" }));
@@ -108,10 +157,18 @@ export const Login: React.FC = () => {
         } catch (error: any) {
             console.warn("Auth error:", error);
             let msg = error.message;
-            if (error.code === "auth/invalid-credential" || error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+            if (
+                error.code === "auth/invalid-credential" ||
+                error.code === "auth/user-not-found" ||
+                error.code === "auth/wrong-password"
+            ) {
                 msg = "Invalid email or password credentials.";
             } else if (error.code === "auth/email-already-in-use") {
                 msg = "This email is already registered. Please sign in instead.";
+            } else if (error.code === "auth/weak-password") {
+                msg = "Password is too weak. Please use at least 6 characters.";
+            } else if (error.code === "auth/too-many-requests") {
+                msg = "Too many failed attempts. Please try again later or reset your password.";
             } else if (error.code === "auth/invalid-api-key") {
                 msg = "Invalid Firebase API key. Please check your configuration.";
             }
@@ -143,7 +200,7 @@ export const Login: React.FC = () => {
                             {isSignInForm ? lang.signIn : lang.signUp}
                         </h1>
                         <p className="text-xs text-gray-400">
-              Unlimited movies, TV shows, and AI-powered recommendations.
+                            Unlimited movies, TV shows, and AI-powered recommendations.
                         </p>
                     </div>
 
@@ -151,6 +208,7 @@ export const Login: React.FC = () => {
                     <button
                         type="button"
                         onClick={handleGuestLogin}
+                        disabled={isSubmitting}
                         className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-red-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
                     >
                         <UserCheck className="w-4 h-4" />
@@ -180,7 +238,8 @@ export const Login: React.FC = () => {
                         <div>
                             <input
                                 ref={emailRef}
-                                type="text"
+                                type="email"
+                                autoComplete="email"
                                 placeholder={lang.emailPlaceholder}
                                 className="w-full bg-[#161616]/80 border border-white/20 rounded-xl px-4 py-3.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-colors"
                             />
@@ -202,6 +261,20 @@ export const Login: React.FC = () => {
                                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                         </div>
+
+                        {/* Forgot password link */}
+                        {isSignInForm && (
+                            <div className="flex justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowForgotModal(true)}
+                                    className="text-xs text-gray-400 hover:text-white hover:underline flex items-center gap-1 transition-colors"
+                                >
+                                    <KeyRound className="w-3 h-3" />
+                                    <span>Forgot password?</span>
+                                </button>
+                            </div>
+                        )}
 
                         {errorMessage && (
                             <div className="flex items-center gap-2 text-xs text-red-400 bg-red-950/40 border border-red-500/20 p-3 rounded-lg animate-in fade-in duration-200">
@@ -236,8 +309,27 @@ export const Login: React.FC = () => {
                 </div>
             </div>
 
+            {/* Modals */}
+            <ForgotPasswordModal
+                isOpen={showForgotModal}
+                onClose={() => setShowForgotModal(false)}
+                onOpenResetModal={(code) => {
+                    setResetCodeForModal(code);
+                    setShowResetModal(true);
+                }}
+            />
+
+            <ResetPasswordModal
+                isOpen={showResetModal}
+                initialCode={resetCodeForModal}
+                onClose={() => {
+                    setShowResetModal(false);
+                    setResetCodeForModal(undefined);
+                }}
+            />
+
             <div className="relative z-10 text-center text-xs text-gray-500 pb-6">
-                Protected by Google reCAPTCHA & Secure Encryption.
+                Protected by Google reCAPTCHA, Firebase JWT & Cloud Firestore Encryption.
             </div>
         </div>
     );

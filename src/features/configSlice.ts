@@ -3,7 +3,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 export interface ToastNotification {
   id: string;
   message: string;
-  type?: "info" | "success" | "warning";
+  type?: "info" | "success" | "warning" | "error";
 }
 
 interface ConfigState {
@@ -38,7 +38,7 @@ const configSlice = createSlice({
         },
         showToast: (
             state,
-            action: PayloadAction<{ message: string; type?: "info" | "success" | "warning" }>
+            action: PayloadAction<{ message: string; type?: "info" | "success" | "warning" | "error" }>
         ) => {
             state.toast = {
                 id: Date.now().toString(),

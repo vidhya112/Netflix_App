@@ -1,5 +1,10 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { Movie } from "../types/movie.types";
+import { auth } from "../utils/firebase";
+import {
+    addMovieToFirestoreWatchlist,
+    removeMovieFromFirestoreWatchlist,
+} from "../services/firestoreService";
 
 const LOCAL_STORAGE_KEY = "netflix_gpt_watchlist";
 
@@ -13,7 +18,7 @@ const loadInitialWatchlist = (): Movie[] => {
 };
 
 interface WatchlistState {
-  items: Movie[];
+    items: Movie[];
 }
 
 const initialState: WatchlistState = {
@@ -24,6 +29,14 @@ const watchlistSlice = createSlice({
     name: "watchlist",
     initialState,
     reducers: {
+        setWatchlistItems: (state, action: PayloadAction<Movie[]>) => {
+            state.items = action.payload;
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(action.payload));
+            } catch (e) {
+                console.error(e);
+            }
+        },
         addToWatchlist: (state, action: PayloadAction<Movie>) => {
             const exists = state.items.some((item) => item.id === action.payload.id);
             if (!exists) {
@@ -33,6 +46,12 @@ const watchlistSlice = createSlice({
                 } catch (e) {
                     console.error(e);
                 }
+
+                // Sync to Cloud Firestore
+                const currentUid = auth?.currentUser?.uid;
+                if (currentUid) {
+                    addMovieToFirestoreWatchlist(currentUid, action.payload as any).catch(() => {});
+                }
             }
         },
         removeFromWatchlist: (state, action: PayloadAction<number>) => {
@@ -41,6 +60,12 @@ const watchlistSlice = createSlice({
                 localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.items));
             } catch (e) {
                 console.error(e);
+            }
+
+            // Sync to Cloud Firestore
+            const currentUid = auth?.currentUser?.uid;
+            if (currentUid) {
+                removeMovieFromFirestoreWatchlist(currentUid, action.payload).catch(() => {});
             }
         },
         clearWatchlist: (state) => {
@@ -54,5 +79,11 @@ const watchlistSlice = createSlice({
     },
 });
 
-export const { addToWatchlist, removeFromWatchlist, clearWatchlist } = watchlistSlice.actions;
+export const {
+    setWatchlistItems,
+    addToWatchlist,
+    removeFromWatchlist,
+    clearWatchlist,
+} = watchlistSlice.actions;
+
 export default watchlistSlice.reducer;

@@ -16,7 +16,9 @@ import {
     Home,
     Tv,
     Film,
+    ShieldAlert,
 } from "lucide-react";
+import { SessionManagerModal } from "../modal/SessionManagerModal";
 
 interface HeaderProps {
     showNavigation?: boolean;
@@ -35,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({ showNavigation = true }) => {
     const [isScrolled, setIsScrolled] = useState(false);
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLangMenu, setShowLangMenu] = useState(false);
+    const [showSessionModal, setShowSessionModal] = useState(false);
 
     const profileRef = useRef<HTMLDivElement>(null);
     const langRef = useRef<HTMLDivElement>(null);
@@ -291,6 +294,17 @@ export const Header: React.FC<HeaderProps> = ({ showNavigation = true }) => {
                                         </button>
 
                                         <button
+                                            onClick={() => {
+                                                setShowSessionModal(true);
+                                                setShowProfileMenu(false);
+                                            }}
+                                            className="w-full flex items-center gap-2.5 text-xs text-gray-300 hover:text-white hover:bg-white/10 px-3 py-2 rounded-lg transition-colors text-left"
+                                        >
+                                            <ShieldAlert className="w-4 h-4 text-amber-500" />
+                                            <span>Security & Sessions</span>
+                                        </button>
+
+                                        <button
                                             onClick={handleSignOut}
                                             className="w-full flex items-center gap-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 px-3 py-2 rounded-lg transition-colors text-left font-semibold"
                                         >
@@ -304,6 +318,12 @@ export const Header: React.FC<HeaderProps> = ({ showNavigation = true }) => {
                     )}
                 </div>
             </header>
+
+            {/* Session Management Modal */}
+            <SessionManagerModal
+                isOpen={showSessionModal}
+                onClose={() => setShowSessionModal(false)}
+            />
 
             {/* Mobile Bottom Navigation Bar (Visible on mobile/tablets < 768px) */}
             {user && showNavigation && (

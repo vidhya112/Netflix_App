@@ -1,30 +1,74 @@
-/**
- * Lightweight Client Authentication Service
- * Replaces external Firebase Auth with resilient local session management.
- * Zero external API keys or third-party credentials required.
- */
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import {
+    getAuth,
+    signInWithEmailAndPassword as fbSignIn,
+    createUserWithEmailAndPassword as fbCreateUser,
+    signOut as fbSignOut,
+    onAuthStateChanged as fbOnAuthStateChanged,
+    updateProfile as fbUpdateProfile,
+    sendPasswordResetEmail as fbSendPasswordResetEmail,
+    confirmPasswordReset as fbConfirmPasswordReset,
+    verifyPasswordResetCode as fbVerifyPasswordResetCode,
+    setPersistence,
+    browserLocalPersistence,
+    Auth,
+    User as FirebaseUser,
+    UserCredential,
+} from "firebase/auth";
+import {
+    getFirestore,
+    Firestore,
+} from "firebase/firestore";
 
-export interface User {
+// Read Firebase configuration from Vite environment variables
+const firebaseConfig = {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
+};
+
+export const hasFirebaseConfig = Boolean(
+    firebaseConfig.apiKey &&
+    firebaseConfig.apiKey !== "your_firebase_api_key_here" &&
+    firebaseConfig.projectId
+);
+
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
+let db: Firestore | null = null;
+
+if (hasFirebaseConfig) {
+    try {
+        app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        setPersistence(auth, browserLocalPersistence).catch(() => {});
+    } catch (error) {
+        console.warn("Firebase initialization error, using local fallback mode:", error);
+    }
+}
+
+// Resilient Fallback Storage for Demo / Offline environments
+const AUTH_STORAGE_KEY = "netflix_gpt_current_user";
+const USERS_STORAGE_KEY = "netflix_gpt_registered_users";
+const RESET_CODES_STORAGE_KEY = "netflix_gpt_reset_codes";
+
+export interface MockUser {
     uid: string;
     email: string | null;
     displayName: string | null;
     photoURL: string | null;
+    emailVerified?: boolean;
+    getIdToken?: () => Promise<string>;
 }
 
-export interface UserCredential {
-    user: User;
-}
-
-const AUTH_STORAGE_KEY = "netflix_gpt_current_user";
-const USERS_STORAGE_KEY = "netflix_gpt_registered_users";
-
-const DEFAULT_AVATAR =
-    "https://occ-0-2794-2219.1.nflxso.net/dnm/api/v6/vN7bi_My87NPKvsBoib006Llxzg/AAAABfjwSMBflnYO0ZFqOMwBzJebsoeNtggxczfg-980BcCr0IxJyW2rA8WRI0ndQnHP273DHAR2nHH26ZX54H9A43U5fZLqrxU.png?r=229";
-
-type AuthListener = (user: User | null) => void;
+type AuthListener = (user: FirebaseUser | MockUser | null) => void;
 const listeners: Set<AuthListener> = new Set();
 
-const notifyListeners = (user: User | null) => {
+const notifyListeners = (user: FirebaseUser | MockUser | null) => {
     listeners.forEach((listener) => {
         try {
             listener(user);
@@ -34,52 +78,42 @@ const notifyListeners = (user: User | null) => {
     });
 };
 
-export const getCurrentUser = (): User | null => {
+const getLocalStoredUser = (): MockUser | null => {
     try {
         const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : null;
+        if (!stored) return null;
+        const parsed = JSON.parse(stored);
+        return {
+            ...parsed,
+            getIdToken: async () => `demo_jwt_token_${parsed.uid}_${Date.now()}`,
+        };
     } catch {
         return null;
     }
 };
 
-export const auth = {
-    get currentUser(): User | null {
-        return getCurrentUser();
-    },
-};
-
-export type Auth = typeof auth;
-
-export const onAuthStateChanged = (
-    _authInstance: any,
-    callback: (user: User | null) => void
-): (() => void) => {
-    listeners.add(callback);
-    // Dispatch initial state asynchronously
-    setTimeout(() => {
-        callback(getCurrentUser());
-    }, 0);
-
-    return () => {
-        listeners.delete(callback);
-    };
-};
-
+/**
+ * Sign In with Email and Password
+ */
 export const signInWithEmailAndPassword = async (
-    _authInstance: any,
+    authInstance: Auth | null,
     email: string,
     password: string
-): Promise<UserCredential> => {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    if (!email || !password) {
-        const error = new Error("Email and password are required");
-        (error as any).code = "auth/invalid-credential";
-        throw error;
+): Promise<UserCredential | { user: MockUser }> => {
+    if (auth && authInstance) {
+        return await fbSignIn(authInstance, email, password);
     }
 
-    let users: Record<string, { password: string; user: User }> = {};
+    // Resilient Local fallback
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (!email || !password) {
+        const err: any = new Error("Email and password are required");
+        err.code = "auth/invalid-credential";
+        throw err;
+    }
+
+    const emailKey = email.toLowerCase().trim();
+    let users: Record<string, { password: string; user: MockUser }> = {};
     try {
         const stored = localStorage.getItem(USERS_STORAGE_KEY);
         if (stored) users = JSON.parse(stored);
@@ -87,55 +121,58 @@ export const signInWithEmailAndPassword = async (
         users = {};
     }
 
-    const emailKey = email.toLowerCase().trim();
-    const registered = users[emailKey];
-
-    if (registered) {
-        if (registered.password !== password) {
-            const error = new Error("Invalid password credentials.");
-            (error as any).code = "auth/wrong-password";
-            throw error;
+    const existing = users[emailKey];
+    if (existing) {
+        if (existing.password !== password) {
+            const err: any = new Error("Invalid password credentials.");
+            err.code = "auth/wrong-password";
+            throw err;
         }
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(registered.user));
-        notifyListeners(registered.user);
-        return { user: registered.user };
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(existing.user));
+        notifyListeners(existing.user);
+        return {
+            user: {
+                ...existing.user,
+                getIdToken: async () => `jwt_token_${existing.user.uid}_${Date.now()}`,
+            },
+        } as any;
     }
 
-    // Auto-create demo user for smooth first-time login
-    const newUser: User = {
+    // Auto-register demo user
+    const newUser: MockUser = {
         uid: `user_${Date.now()}`,
         email: email.trim(),
         displayName: email.split("@")[0],
-        photoURL: DEFAULT_AVATAR,
+        photoURL: "https://occ-0-2794-2219.1.nflxso.net/dnm/api/v6/vN7bi_My87NPKvsBoib006Llxzg/AAAABfjwSMBflnYO0ZFqOMwBzJebsoeNtggxczfg-980BcCr0IxJyW2rA8WRI0ndQnHP273DHAR2nHH26ZX54H9A43U5fZLqrxU.png?r=229",
     };
-
     users[emailKey] = { password, user: newUser };
-    try {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-    } catch {
-        // storage fallback
-    }
-
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
     notifyListeners(newUser);
-    return { user: newUser };
+
+    return {
+        user: {
+            ...newUser,
+            getIdToken: async () => `jwt_token_${newUser.uid}_${Date.now()}`,
+        },
+    } as any;
 };
 
+/**
+ * Create User with Email and Password
+ */
 export const createUserWithEmailAndPassword = async (
-    _authInstance: any,
+    authInstance: Auth | null,
     email: string,
     password: string
-): Promise<UserCredential> => {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    if (!email || !password) {
-        const error = new Error("Email and password are required");
-        (error as any).code = "auth/invalid-credential";
-        throw error;
+): Promise<UserCredential | { user: MockUser }> => {
+    if (auth && authInstance) {
+        return await fbCreateUser(authInstance, email, password);
     }
 
+    await new Promise((resolve) => setTimeout(resolve, 250));
     const emailKey = email.toLowerCase().trim();
-    let users: Record<string, { password: string; user: User }> = {};
+    let users: Record<string, { password: string; user: MockUser }> = {};
     try {
         const stored = localStorage.getItem(USERS_STORAGE_KEY);
         if (stored) users = JSON.parse(stored);
@@ -143,41 +180,167 @@ export const createUserWithEmailAndPassword = async (
         users = {};
     }
 
-    const newUser: User = {
+    if (users[emailKey]) {
+        const err: any = new Error("This email is already registered.");
+        err.code = "auth/email-already-in-use";
+        throw err;
+    }
+
+    const newUser: MockUser = {
         uid: `user_${Date.now()}`,
         email: email.trim(),
         displayName: email.split("@")[0],
-        photoURL: DEFAULT_AVATAR,
+        photoURL: "https://occ-0-2794-2219.1.nflxso.net/dnm/api/v6/vN7bi_My87NPKvsBoib006Llxzg/AAAABfjwSMBflnYO0ZFqOMwBzJebsoeNtggxczfg-980BcCr0IxJyW2rA8WRI0ndQnHP273DHAR2nHH26ZX54H9A43U5fZLqrxU.png?r=229",
     };
-
     users[emailKey] = { password, user: newUser };
-    try {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-    } catch {
-        // storage fallback
-    }
-
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
     notifyListeners(newUser);
-    return { user: newUser };
+
+    return {
+        user: {
+            ...newUser,
+            getIdToken: async () => `jwt_token_${newUser.uid}_${Date.now()}`,
+        },
+    } as any;
 };
 
+/**
+ * Send Password Reset Email
+ */
+export const sendPasswordResetEmail = async (
+    authInstance: Auth | null,
+    email: string
+): Promise<{ resetCode?: string }> => {
+    if (auth && authInstance) {
+        await fbSendPasswordResetEmail(authInstance, email);
+        return {};
+    }
+
+    // Local fallback: generate a simulated reset action code
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const emailKey = email.toLowerCase().trim();
+    const mockCode = `reset_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+
+    let resetCodes: Record<string, { email: string; expiresAt: number }> = {};
+    try {
+        const stored = localStorage.getItem(RESET_CODES_STORAGE_KEY);
+        if (stored) resetCodes = JSON.parse(stored);
+    } catch {
+        resetCodes = {};
+    }
+
+    resetCodes[mockCode] = {
+        email: emailKey,
+        expiresAt: Date.now() + 3600 * 1000, // 1 hour
+    };
+    localStorage.setItem(RESET_CODES_STORAGE_KEY, JSON.stringify(resetCodes));
+
+    return { resetCode: mockCode };
+};
+
+/**
+ * Verify Password Reset Code
+ */
+export const verifyPasswordResetCode = async (
+    authInstance: Auth | null,
+    code: string
+): Promise<string> => {
+    if (auth && authInstance) {
+        return await fbVerifyPasswordResetCode(authInstance, code);
+    }
+
+    try {
+        const stored = localStorage.getItem(RESET_CODES_STORAGE_KEY);
+        const resetCodes = stored ? JSON.parse(stored) : {};
+        const entry = resetCodes[code];
+        if (!entry || entry.expiresAt < Date.now()) {
+            const err: any = new Error("Password reset link is invalid or expired.");
+            err.code = "auth/invalid-action-code";
+            throw err;
+        }
+        return entry.email;
+    } catch (e: any) {
+        if (e.code) throw e;
+        const err: any = new Error("Invalid password reset code.");
+        err.code = "auth/invalid-action-code";
+        throw err;
+    }
+};
+
+/**
+ * Confirm Password Reset
+ */
+export const confirmPasswordReset = async (
+    authInstance: Auth | null,
+    code: string,
+    newPassword: string
+): Promise<void> => {
+    if (auth && authInstance) {
+        await fbConfirmPasswordReset(authInstance, code, newPassword);
+        return;
+    }
+
+    const email = await verifyPasswordResetCode(null, code);
+    let users: Record<string, { password: string; user: MockUser }> = {};
+    try {
+        const stored = localStorage.getItem(USERS_STORAGE_KEY);
+        if (stored) users = JSON.parse(stored);
+    } catch {
+        users = {};
+    }
+
+    if (users[email]) {
+        users[email].password = newPassword;
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    }
+
+    // Invalidate reset code
+    try {
+        const stored = localStorage.getItem(RESET_CODES_STORAGE_KEY);
+        if (stored) {
+            const resetCodes = JSON.parse(stored);
+            delete resetCodes[code];
+            localStorage.setItem(RESET_CODES_STORAGE_KEY, JSON.stringify(resetCodes));
+        }
+    } catch {
+        // ignore
+    }
+};
+
+/**
+ * Update Profile
+ */
 export const updateProfile = async (
-    user: User,
+    user: FirebaseUser | MockUser,
     profile: { displayName?: string; photoURL?: string }
 ): Promise<void> => {
-    if (profile.displayName !== undefined) user.displayName = profile.displayName;
-    if (profile.photoURL !== undefined) user.photoURL = profile.photoURL;
+    if (auth && user && (user as FirebaseUser).getIdTokenResult) {
+        await fbUpdateProfile(user as FirebaseUser, profile);
+        return;
+    }
+
+    const mockUser = user as MockUser;
+    if (profile.displayName !== undefined) mockUser.displayName = profile.displayName;
+    if (profile.photoURL !== undefined) mockUser.photoURL = profile.photoURL;
 
     try {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(mockUser));
     } catch {
         // storage fallback
     }
-    notifyListeners(user);
+    notifyListeners(mockUser);
 };
 
-export const signOut = async (_authInstance?: any): Promise<void> => {
+/**
+ * Sign Out
+ */
+export const signOut = async (authInstance?: Auth | null): Promise<void> => {
+    if (auth && authInstance) {
+        await fbSignOut(authInstance);
+        return;
+    }
+
     try {
         localStorage.removeItem(AUTH_STORAGE_KEY);
     } catch {
@@ -186,4 +349,25 @@ export const signOut = async (_authInstance?: any): Promise<void> => {
     notifyListeners(null);
 };
 
-export const app = { name: "netflix-app" };
+/**
+ * Auth State Observer
+ */
+export const onAuthStateChanged = (
+    authInstance: Auth | null,
+    callback: (user: FirebaseUser | MockUser | null) => void
+): (() => void) => {
+    if (auth && authInstance) {
+        return fbOnAuthStateChanged(authInstance, callback as any);
+    }
+
+    listeners.add(callback);
+    setTimeout(() => {
+        callback(getLocalStoredUser());
+    }, 0);
+
+    return () => {
+        listeners.delete(callback);
+    };
+};
+
+export { app, auth, db };

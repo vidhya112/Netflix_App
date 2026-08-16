@@ -16,6 +16,8 @@ export interface Movie {
   adult?: boolean;
 }
 
+export type WatchlistItem = Movie & { addedAt?: string };
+
 export interface Genre {
   id: number;
   name: string;
